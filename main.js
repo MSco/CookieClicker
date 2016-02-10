@@ -335,8 +335,9 @@ Game={};
 
 Game.Launch=function()
 {
-	Game.version=1.0464;
+	Game.version=1.0465;
 	Game.beta=0;
+	if (window.location.href.indexOf('/beta')>-1) Game.beta=1;
 	Game.mobile=0;
 	Game.touchEvents=0;
 	//if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) Game.mobile=1;
@@ -1204,10 +1205,16 @@ Game.Launch=function()
 						Game.santaLevel=0;
 						Game.reindeerClicked=0;
 						*/
+						
 						//recompute season trigger prices
+						if (Game.Has('Season switcher')) {for (var i in Game.seasons) {Game.Unlock(Game.seasons[i].trigger);}}
 						Game.computeSeasonPrices();
 			
+			
+			
 						Game.CalculateGains();
+						
+						
 						
 						if (version==1.037 && Game.beta)//are we opening the new beta? if so, save the old beta to /betadungeons
 						{
@@ -1699,7 +1706,7 @@ Game.Launch=function()
 			if (Game.Has('Century egg'))
 			{
 				//the boost increases a little every day, with diminishing returns up to +10% on the 100th day
-				var day=((new Date().getTime()-Game.startDate)/1000/60/60/24);
+				var day=Math.floor((new Date().getTime()-Game.startDate)/1000/10)*10/60/60/24;
 				day=Math.min(day,100);
 				eggMult+=(1-Math.pow(1-day/100,3))*10;
 			}
@@ -1816,7 +1823,7 @@ Game.Launch=function()
 			me.style.msTransform='rotate('+r+'deg)';
 			me.style.oTransform='rotate('+r+'deg)';
 			var screen=Game.l.getBoundingClientRect();
-			this.x=Math.floor(Math.random()*Math.max(0,(screen.right-160)-screen.left-128)+screen.left+64)-64;
+			this.x=Math.floor(Math.random()*Math.max(0,(screen.right-300)-screen.left-128)+screen.left+64)-64;
 			this.y=Math.floor(Math.random()*Math.max(0,screen.bottom-screen.top-128)+screen.top+64)-64;
 			me.style.left=this.x+'px';
 			me.style.top=this.y+'px';
@@ -1825,7 +1832,7 @@ Game.Launch=function()
 			var dur=13;
 			if (Game.Has('Lucky day')) dur*=2;
 			if (Game.Has('Serendipity')) dur*=2;
-			if (this.chain>0) dur=Math.max(1.5,10/this.chain);//this is hilarious
+			if (this.chain>0) dur=Math.max(2,10/this.chain);//this is hilarious
 			this.dur=dur;
 			this.life=Math.ceil(Game.fps*this.dur);
 			this.time=0;
@@ -2979,7 +2986,7 @@ Game.Launch=function()
 		{
 			if (this.origin=='store')
 			{
-				this.tta.style.right='468px';//'308px';
+				this.tta.style.right='308px';//'468px';
 				this.tta.style.left='auto';
 			}
 			else
@@ -5954,7 +5961,7 @@ Game.Launch=function()
 			if (Game.clickFrenzy<1) Game.recalculateGains=1;
 		}
 		
-		if (Game.T%(Game.fps*60*2)) Game.recalculateGains=1;//recalculate CpS every 2 minutes (for dynamic boosts such as Century egg)
+		if (Game.T%(Game.fps*10)==0) Game.recalculateGains=1;//recalculate CpS every 2 minutes (for dynamic boosts such as Century egg)
 		
 		/*=====================================================================================
 		UNLOCKING STUFF
@@ -6235,7 +6242,7 @@ Game.Launch=function()
 		if (Game.drawT%(Game.fps*3)==0) Game.UpdateMenu();
 		if (Game.drawT%(Game.fps*3)==0) Game.UpdatePrompt();
 		
-		if (Game.prefs.animate && Game.drawT%1==0) Game.DrawBuildings();
+		if (Game.prefs.animate && ((Game.prefs.fancy && Game.drawT%1==0) || (!Game.prefs.fancy && Game.drawT%10==0))) Game.DrawBuildings();
 		
 		Game.textParticlesUpdate();
 		Game.NotesDraw();
