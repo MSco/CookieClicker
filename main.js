@@ -451,7 +451,7 @@ var Game={};
 
 Game.Launch=function()
 {
-	Game.version=1.903;
+	Game.version=1.907;
 	Game.beta=1;
 	if (window.location.href.indexOf('/beta')>-1) Game.beta=1;
 	Game.mobile=0;
@@ -490,9 +490,14 @@ Game.Launch=function()
 	'</div><div class="subsection">'+
 	'<div class="title">Version history</div>'+
 	
+	'</div><div class="subsection update small">'+
+	'<div class="title">05/02/2016 - legacy beta, more fixes</div>'+
+	'<div class="listing">&bull; added challenge modes, which can be selected when ascending (only 1 for now : "Born again")</div>'+
+	'<div class="listing">&bull; changed the way bulk-buying and bulk-selling works</div>'+
+	'<div class="listing">&bull; more bugs ironed out</div>'+
+	
 	'</div><div class="subsection update">'+
 	'<div class="title">03/02/2016 - legacy beta, part III</div>'+
-	'<div class="listing warning">&bull; Please note : some achievements (Neverclick, Hardcore and some others) are disabled until challenge modes are added.</div>'+
 	'<div class="listing warning">&bull; Not all bugs have been fixed, but everything should be much less broken.</div>'+
 	'<div class="listing">&bull; Additions'+
 		'<div style="opacity:0.8;margin-left:12px;">'+
@@ -814,6 +819,7 @@ Game.Launch=function()
 		=======================================================================================*/
 		Game.T=0;
 		Game.drawT=0;
+		Game.loopT=0;
 		Game.fps=30;
 		
 		Game.season=Game.baseSeason;
@@ -961,6 +967,7 @@ Game.Launch=function()
 			Game.prefs.filters=0;//CSS filter effects (might be heavy on some browsers)
 			Game.prefs.cookiesound=1;//use new cookie click sound
 			Game.prefs.crates=0;//show crates around icons in stats
+			Game.prefs.altDraw=0;//use requestAnimationFrame to update drawing instead of fixed 30 fps setTimeout
 		}
 		Game.DefaultPrefs();
 		
@@ -1610,10 +1617,6 @@ Game.Launch=function()
 						Game.prestige=Math.floor(Game.HowMuchPrestige(Game.cookiesReset));
 						//if ((Game.heavenlyChips+Game.heavenlyChipsSpent)<Game.prestige)
 						//{Game.heavenlyChips=Game.prestige;Game.heavenlyChipsSpent=0;}//chips owned and spent don't add up to total prestige? set chips owned to prestige
-			
-						Game.bakeryNameRefresh();
-						
-						Game.CalculateGains();
 						
 						
 						
@@ -1628,7 +1631,7 @@ Game.Launch=function()
 							window.localStorage.setItem('CookieClickerGameOld',window.localStorage.getItem('CookieClickerGameBeta'));
 							//Game.Notify('Beta save data','Your beta save data has been safely exported to /oldbeta.',20);
 						}
-						else if (version==1.0466 && !Game.beta)//export the old 2014 version to /v10466
+						if (version<=1.0466 && !Game.beta)//export the old 2014 version to /v10466
 						{
 							window.localStorage.setItem('CookieClickerGamev10466',window.localStorage.getItem('CookieClickerGame'));
 							//Game.Notify('Beta save data','Your save data has been safely exported to /v10466.',20);
@@ -1649,9 +1652,19 @@ Game.Launch=function()
 							
 							setTimeout(function(){Game.Prompt('<h3>Beta patch</h3><div class="block">We\'ve tweaked some things and fixed some others, please check the update notes!<div class="line"></div>Of note : due to changes in prestige balancing, all your heavenly upgrades have been removed and your heavenly chips refunded; you\'ll be able to reallocate them next time you ascend.<div class="line"></div>Thank you again for beta-testing Cookie Clicker!</div>',[['Alright then!','Game.ClosePrompt();']]);},200);
 						}
+						if (version<=1.0466)//are we loading from the old live version? reset HCs
+						{
+							Game.heavenlyChips=Game.prestige;
+							Game.heavenlyChipsSpent=0;
+						}
 						
-						if (Game.Has('Starter kit')) Game.Objects['Cursor'].free=10;
-						if (Game.Has('Starter kitchen')) Game.Objects['Grandma'].free=5;
+						if (Game.ascensionMode!=1)
+						{
+							if (Game.Has('Starter kit')) Game.Objects['Cursor'].free=10;
+							if (Game.Has('Starter kitchen')) Game.Objects['Grandma'].free=5;
+						}
+						
+						Game.CalculateGains();
 						
 						//compute cookies earned while the game was closed
 						if (Game.mobile || Game.Has('Perfect idling') || Game.Has('Twin Gates of Transcendence'))
@@ -1697,6 +1710,9 @@ Game.Launch=function()
 							}
 						}
 						
+			
+						Game.bakeryNameRefresh();
+						
 					}
 					else//importing old version save
 					{
@@ -1720,6 +1736,8 @@ Game.Launch=function()
 					Game.storeToRefresh=1;
 					Game.upgradesToRebuild=1;
 					
+					Game.buyMode=1;Game.buyBulk=1;
+			
 					Game.specialTab='';
 					Game.ToggleSpecialMenu(0);
 					
@@ -1827,15 +1845,18 @@ Game.Launch=function()
 			
 			if (!hard)
 			{
-				for (var i in Game.permanentUpgrades)
+				if (Game.ascensionMode!=1)
 				{
-					if (Game.permanentUpgrades[i]!=-1)
-					{Game.UpgradesById[Game.permanentUpgrades[i]].earn();}
+					for (var i in Game.permanentUpgrades)
+					{
+						if (Game.permanentUpgrades[i]!=-1)
+						{Game.UpgradesById[Game.permanentUpgrades[i]].earn();}
+					}
+					if (Game.Has('Season switcher')) {for (var i in Game.seasons) {Game.Unlock(Game.seasons[i].trigger);}}
+					
+					if (Game.Has('Starter kit')) Game.Objects['Cursor'].getFree(10);
+					if (Game.Has('Starter kitchen')) Game.Objects['Grandma'].getFree(5);
 				}
-				if (Game.Has('Season switcher')) {for (var i in Game.seasons) {Game.Unlock(Game.seasons[i].trigger);}}
-				
-				if (Game.Has('Starter kit')) Game.Objects['Cursor'].getFree(10);
-				if (Game.Has('Starter kitchen')) Game.Objects['Grandma'].getFree(5);
 			}
 			
 			/*for (var i in Game.AchievementsById)
@@ -1854,6 +1875,8 @@ Game.Launch=function()
 			Game.goldenCookie.reset();
 			Game.seasonPopup.reset();
 			
+			Game.buyMode=1;Game.buyBulk=1;
+			
 			l('toggleBox').style.display='none';
 			l('toggleBox').innerHTML='';
 			Game.choiceSelectorOn=-1;
@@ -1862,12 +1885,14 @@ Game.Launch=function()
 			
 			for (var i in Game.customReset) {Game.customReset[i]();}
 			
-			if (!hard)
+			if (hard)
 			{
-				//Game.EarnHeavenlyChips(cookiesForfeited);
-			}
-			else
-			{
+				if (Game.T>Game.fps*5 && Game.ReincarnateTimer==0)//fade out of black and pop the cookie
+				{
+					Game.ReincarnateTimer=1;
+					Game.addClass('reincarnating');
+					Game.BigCookieSize=0;
+				}
 				if (Game.prefs.popups) Game.Popup('Game reset');
 				else Game.Notify('Game reset','So long, cookies.',[21,6],6);
 			}
@@ -2218,6 +2243,12 @@ Game.Launch=function()
 			return heavenlyMult;
 		}
 		
+		Game.ascensionModes={
+		0:{name:'None',desc:'No special modifiers.',icon:[10,0]},
+		1:{name:'Born again',desc:'This run will behave as if you\'d just started the game from scratch. Prestige levels and heavenly upgrades will have no effect.<div class="line"></div>Some achievements are only available in this mode.',icon:[2,7]}/*,
+		2:{name:'Trigger finger',desc:'In this run, scrolling your mouse wheel on the cookie counts as clicking it. Some upgrades introduce new clicking behaviors.<br>No clicking achievements may be obtained in this mode.<div class="line"></div>Reaching 1 quadrillion cookies in this mode unlocks a special heavenly upgrade.',icon:[12,0]}*/
+		};
+		
 		Game.ascendMeterPercent=0;
 		Game.ascendMeterPercentT=0;
 		Game.ascendMeterLevel=100000000000000000000000000000;
@@ -2236,6 +2267,33 @@ Game.Launch=function()
 			l('promptOption0').className='option framed large title';
 			l('promptOption0').style.display='none';
 			Game.UpdatePrompt();
+		}
+		
+		Game.nextAscensionMode=0;
+		Game.UpdateAscensionModePrompt=function()
+		{
+			var icon=Game.ascensionModes[Game.nextAscensionMode].icon;
+			var name=Game.ascensionModes[Game.nextAscensionMode].name;
+			l('ascendModeButton').innerHTML=
+			'<div class="crate noFrame enabled" '+Game.clickStr+'="Game.PickAscensionMode();" '+Game.getTooltip(
+				'<div style="min-width:200px;text-align:center;font-size:11px;">Challenge mode for the next run :<br><b>'+name+'</b><div class="line"></div>Challenge modes apply special modifiers to your next ascension.<br>Click to change.</div>'
+			,'bottom-right')+' style="opacity:1;float:none;display:block;background-position:'+(-icon[0]*48)+'px '+(-icon[1]*48)+'px;"></div>';
+		}
+		Game.PickAscensionMode=function()
+		{
+			PlaySound('snd/tick.mp3');
+			Game.tooltip.hide();
+			
+			var str='';
+			for (var i in Game.ascensionModes)
+			{
+				var icon=Game.ascensionModes[i].icon;
+				str+='<div class="crate enabled'+(i==Game.nextAscensionMode?' highlighted':'')+'" id="challengeModeSelector'+i+'" style="opacity:1;float:none;display:inline-block;background-position:'+(-icon[0]*48)+'px '+(-icon[1]*48)+'px;" '+Game.clickStr+'="Game.nextAscensionMode='+i+';Game.PickAscensionMode();PlaySound(\'snd/tick.mp3\');Game.choiceSelectorOn=-1;" onMouseOut="l(\'challengeSelectedName\').innerHTML=Game.ascensionModes[Game.nextAscensionMode].name;l(\'challengeSelectedDesc\').innerHTML=Game.ascensionModes[Game.nextAscensionMode].desc;" onMouseOver="l(\'challengeSelectedName\').innerHTML=Game.ascensionModes['+i+'].name;l(\'challengeSelectedDesc\').innerHTML=Game.ascensionModes['+i+'].desc;"'+
+				'></div>';
+			}
+			Game.Prompt('<h3>Select a challenge mode</h3>'+
+						'<div class="line"></div><div class="crateBox">'+str+'</div><h4 id="challengeSelectedName">'+Game.ascensionModes[Game.nextAscensionMode].name+'</h4><div class="line"></div><div id="challengeSelectedDesc" style="min-height:128px;">'+Game.ascensionModes[Game.nextAscensionMode].desc+'</div><div class="line"></div>'
+						,[['Confirm','Game.UpdateAscensionModePrompt();Game.ClosePrompt();']],0,'widePrompt');
 		}
 		
 		Game.UpdateLegacyPrompt=function()
@@ -2260,7 +2318,6 @@ Game.Launch=function()
 			if (1 || ascendNowToGet>=1) l('promptOption0').style.display='inline-block'; else l('promptOption0').style.display='none';
 		}
 		
-		
 		l('ascendOverlay').innerHTML=
 			'<div id="ascendBox">'+
 			'<div class="ascendData smallFramed prompt" '+Game.getTooltip(
@@ -2271,8 +2328,13 @@ Game.Launch=function()
 							,'bottom-right')+'><h3 id="ascendHCs"></h3></div>'+
 			'<a id="ascendButton" class="option framed large red" '+Game.getTooltip(
 							'<div style="min-width:200px;text-align:center;font-size:11px;">Click this once you\'ve bought<br>everything you need!</div>'
-							,'bottom-right')+' style="font-size:16px;margin-top:0px;"><span class="fancyText" style="font-size:20px;">Reincarnate</span></a><input type="text" style="display:block;" id="upgradePositions"/></div>'+
+							,'bottom-right')+' style="font-size:16px;margin-top:0px;"><span class="fancyText" style="font-size:20px;">Reincarnate</span></a>'+
+			'<div id="ascendModeButton" style="position:absolute;right:34px;bottom:25px;display:none;"></div>'+
+			'<input type="text" style="display:block;" id="upgradePositions"/></div>'+
+			
 			'<div id="ascendInfo"><div class="ascendData smallFramed" style="margin-top:22px;width:40%;font-size:11px;">You are ascending.<br>Drag the screen around<br>or use arrow keys!<br>When you\'re ready,<br>click Reincarnate.</div></div>';
+		
+		Game.UpdateAscensionModePrompt();
 		
 		AddEvent(l('ascendButton'),'click',function(){
 			PlaySound('snd/tick.mp3');
@@ -2302,6 +2364,8 @@ Game.Launch=function()
 				Game.addClass('ascending');
 				Game.BuildAscendTree();
 				Game.heavenlyChipsDisplayed=Game.heavenlyChips;
+				Game.nextAscensionMode=0;
+				Game.ascensionMode=0;
 			}
 		}
 		Game.ReincarnateTimer=0;//how far we are into the reincarnation animation
@@ -2322,6 +2386,8 @@ Game.Launch=function()
 			else
 			{
 				Game.ascendUpgradesl.innerHTML='';
+				Game.ascensionMode=Game.nextAscensionMode;
+				Game.nextAscensionMode=0;
 				Game.Reset();
 				if (Game.HasAchiev('Rebirth'))
 				{
@@ -2500,6 +2566,8 @@ Game.Launch=function()
 			{
 				l('ascendPrestige').innerHTML='Prestige level :<br>'+Beautify(Game.prestige);
 				l('ascendHCs').innerHTML='Heavenly chips :<br><span class="price heavenly">'+Beautify(Math.round(Game.heavenlyChipsDisplayed))+'</span>';
+				if (Game.prestige>0) l('ascendModeButton').style.display='block';
+				else l('ascendModeButton').style.display='none';
 			}
 			Game.heavenlyChipsDisplayed+=(Game.heavenlyChips-Game.heavenlyChipsDisplayed)*0.4;
 			
@@ -2817,7 +2885,7 @@ Game.Launch=function()
 			Game.cookiesPs=0;
 			var mult=1;
 			
-			mult+=parseFloat(Game.prestige)*0.01*Game.heavenlyPower*Game.GetHeavenlyMultiplier();
+			if (Game.ascensionMode!=1) mult+=parseFloat(Game.prestige)*0.01*Game.heavenlyPower*Game.GetHeavenlyMultiplier();
 			
 			var cookieMult=0;
 			for (var i in Game.Upgrades)
@@ -2908,7 +2976,7 @@ Game.Launch=function()
 			
 			name=Game.bakeryName.toLowerCase();
 			if (name=='orteil') mult*=0.99;
-			else if (name=='ortiel') mult*=0.0001;//or so help me
+			else if (name=='ortiel') mult*=0.98;//or so help me
 			
 			var sucked=1;
 			for (var i in Game.wrinklers)
@@ -3949,14 +4017,14 @@ Game.Launch=function()
 				Game.WriteButton('milk','milkButton','Milk ON','Milk OFF')+'<label>(only appears with enough achievements)</label><br>'+
 				Game.WriteButton('cursors','cursorsButton','Cursors ON','Cursors OFF')+'<label>(visual display of your cursors)</label><br>'+
 				Game.WriteButton('wobbly','wobblyButton','Wobbly cookie ON','Wobbly cookie OFF')+'<label>(your cookie will react when you click it)</label><br>'+
-				Game.WriteButton('cookiesound','cookiesoundButton','Cookie sound B','Cookie sound A')+'<label>(how your cookie sounds when you click on it)</label><br>'+
+				Game.WriteButton('cookiesound','cookiesoundButton','Alt cookie sound ON','Alt cookie sound OFF')+'<label>(how your cookie sounds when you click on it)</label><br>'+
 				Game.WriteButton('crates','cratesButton','Icon crates ON','Icon crates OFF')+'<label>(display boxes around upgrades and achievements in stats)</label><br>'+
 				Game.WriteButton('monospace','monospaceButton','Alt font ON','Alt font OFF')+'<label>(your cookies are displayed using a monospace font)</label><br>'+
 				Game.WriteButton('format','formatButton','Short numbers OFF','Short numbers ON','BeautifyAll();Game.RefreshStore();Game.upgradesToRebuild=1;',1)+'<label>(shorten big numbers)</label><br>'+
 				Game.WriteButton('notifs','notifsButton','Fast notes ON','Fast notes OFF')+'<label>(notifications disappear much faster)</label><br>'+
 				Game.WriteButton('autoupdate','autoupdateButton','Offline mode OFF','Offline mode ON',0,1)+'<label>(disables update notifications)</label><br>'+
 				Game.WriteButton('warn','warnButton','Closing warning ON','Closing warning OFF')+'<label>(the game will ask you to confirm when you close the window)</label><br>'+
-				/*Game.WriteButton('focus','focusButton','Defocus OFF','Defocus ON',0,1)+'<label>(the game will be less resource-intensive when out of focus)</label><br>'+*/
+				Game.WriteButton('focus','focusButton','Defocus OFF','Defocus ON',0,1)+'<label>(the game will be less resource-intensive when out of focus)</label><br>'+
 				'</div>'+
 				//'<div class="listing">'+Game.WriteButton('autosave','autosaveButton','Autosave ON','Autosave OFF')+'</div>'+
 				'<div style="padding-bottom:128px;"></div>'+
@@ -4095,6 +4163,11 @@ Game.Launch=function()
 					}
 					dragonStr+='<div style="clear:both;"></div>';
 				}
+				var ascensionModeStr='';
+				var icon=Game.ascensionModes[Game.ascensionMode].icon;
+				if (Game.resets>0) ascensionModeStr='<span style="cursor:pointer;" '+Game.getTooltip(
+							'<div style="min-width:200px;text-align:center;font-size:11px;">'+Game.ascensionModes[Game.ascensionMode].desc+'</div>'
+							,'top')+'><div class="icon" style="display:inline-block;float:none;transform:scale(0.5);margin:-24px -16px -19px -8px;background-position:'+(-icon[0]*48)+'px '+(-icon[1]*48)+'px;"></div>'+Game.ascensionModes[Game.ascensionMode].name+'</span>';
 				
 				var milkName=Game.Milk.name;
 				
@@ -4141,9 +4214,10 @@ Game.Launch=function()
 				'<div class="listing"><b>Golden cookie clicks :</b> '+Beautify(Game.goldenClicksLocal)+' <small>(all time : '+Beautify(Game.goldenClicks)+')</small></div>'+//' <span class="hidden">(<b>Missed golden cookies :</b> '+Beautify(Game.missedGoldenClicks)+')</span></div>'+
 				'<br><div class="listing"><b>Running version :</b> '+Game.version+'</div>'+
 				
-				((researchStr!='' || wrathStr!='' || pledgeStr!='' || santaStr!='' || Game.season!='' || Game.dragonStr!='')?(
+				((researchStr!='' || wrathStr!='' || pledgeStr!='' || santaStr!='' || dragonStr!='' || Game.season!='' || ascensionModeStr!='')?(
 				'</div><div class="subsection">'+
 				'<div class="title">Special</div>'+
+				(ascensionModeStr!=''?'<div class="listing"><b>Challenge mode :</b>'+ascensionModeStr+'</div>':'')+
 				(Game.season!=''?'<div class="listing"><b>Seasonal event :</b> '+Game.seasons[Game.season].name+
 					(seasonStr!=''?' <small>('+seasonStr+' remaining)</small>':'')+
 				'</div>':'')+
@@ -4721,6 +4795,8 @@ Game.Launch=function()
 		
 		Game.storeToRefresh=1;
 		Game.priceIncrease=1.15;
+		Game.buyBulk=1;
+		Game.buyMode=1;//1 for buy, -1 for sell
 		
 		Game.Objects=[];
 		Game.ObjectsById=[];
@@ -4738,6 +4814,7 @@ Game.Launch=function()
 			this.desc=desc;
 			this.basePrice=price;
 			this.price=this.basePrice;
+			this.bulkPrice=this.price;
 			this.cps=cps;
 			this.baseCps=this.cps;
 			
@@ -4758,6 +4835,7 @@ Game.Launch=function()
 				var digits=Math.pow(10,(Math.ceil(Math.log(Math.ceil(this.basePrice))/Math.LN10)))/100;
 				this.basePrice=Math.round(this.basePrice/digits)*digits;
 				this.price=this.basePrice;
+				this.bulkPrice=this.price;
 			}
 			
 			this.totalCookies=0;
@@ -4796,13 +4874,50 @@ Game.Launch=function()
 				if (Game.hasAura('Fierce Hoarder')) price*=0.98;
 				return Math.ceil(price);
 			}
+			this.getSumPrice=function(amount)//return how much it would cost to buy [amount] more of this building
+			{
+				var price=0;
+				for (var i=Math.max(0,this.amount-this.free);i<Math.max(0,(this.amount-this.free)+amount);i++)
+				{
+					price+=this.basePrice*Math.pow(Game.priceIncrease,Math.max(0,i));
+				}
+				if (Game.Has('Season savings')) price*=0.99;
+				if (Game.Has('Santa\'s dominion')) price*=0.99;
+				if (Game.Has('Faberge egg')) price*=0.99;
+				if (Game.Has('Divine discount')) price*=0.99;
+				if (Game.hasAura('Fierce Hoarder')) price*=0.98;
+				return Math.ceil(price);
+			}
+			this.getReverseSumPrice=function(amount)//return how much you'd get from selling [amount] of this building
+			{
+				var price=0;
+				for (var i=Math.max(0,(this.amount-this.free)-amount);i<Math.max(0,this.amount-this.free);i++)
+				{
+					price+=this.basePrice*Math.pow(Game.priceIncrease,Math.max(0,i));
+				}
+				if (Game.Has('Season savings')) price*=0.99;
+				if (Game.Has('Santa\'s dominion')) price*=0.99;
+				if (Game.Has('Faberge egg')) price*=0.99;
+				if (Game.Has('Divine discount')) price*=0.99;
+				if (Game.hasAura('Fierce Hoarder')) price*=0.98;
+				price*=this.getSellMultiplier();
+				return Math.ceil(price);
+			}
+			this.getSellMultiplier=function()
+			{
+				var giveBack=0.5;
+				if (Game.hasAura('Earth Shatterer')) giveBack=0.85;
+				return giveBack;
+			}
 			
 			this.buy=function(amount)
 			{
+				if (Game.buyMode==-1) {this.sell(Game.buyBulk,1);return 0;}
 				var success=0;
 				var moni=0;
 				var bought=0;
-				if (!amount) amount=1;
+				if (!amount) amount=Game.buyBulk;
+				if (amount==-1) amount=1000;
 				for (var i=0;i<amount;i++)
 				{
 					var price=this.getPrice();
@@ -4822,9 +4937,8 @@ Game.Launch=function()
 						success=1;
 					}
 				}
-				if (success) {PlaySound('snd/buy'+choose([1,2,3,4])+'.mp3',0.75);
-this.refresh();}
-				if (moni>0 && amount>1) Game.Notify(this.name,'Bought <b>'+bought+'</b> for '+Beautify(moni)+' cookies','',2);
+				if (success) {PlaySound('snd/buy'+choose([1,2,3,4])+'.mp3',0.75);this.refresh();}
+				//if (moni>0 && amount>1) Game.Notify(this.name,'Bought <b>'+bought+'</b> for '+Beautify(moni)+' cookies','',2);
 			}
 			this.sell=function(amount,bypass)
 			{
@@ -4832,12 +4946,11 @@ this.refresh();}
 				var moni=0;
 				var sold=0;
 				if (amount==-1) amount=this.amount;
-				if (!amount) amount=1;
+				if (!amount) amount=Game.buyBulk;
 				for (var i=0;i<amount;i++)
 				{
 					var price=this.getPrice();
-					var giveBack=0.5;
-					if (Game.hasAura('Earth Shatterer')) giveBack=0.85;
+					var giveBack=this.getSellMultiplier();
 					price=Math.floor(price*giveBack);
 					if (this.amount>0)
 					{
@@ -4856,7 +4969,7 @@ this.refresh();}
 					}
 				}
 				if (success) {PlaySound('snd/sell'+choose([1,2,3,4])+'.mp3',0.75);this.refresh();}
-				if (moni>0) Game.Notify(this.name,'Sold <b>'+sold+'</b> for '+Beautify(moni)+' cookies','',2);
+				//if (moni>0) Game.Notify(this.name,'Sold <b>'+sold+'</b> for '+Beautify(moni)+' cookies','',2);
 			}
 			this.sacrifice=function(amount)//sell without getting back any money
 			{
@@ -4972,6 +5085,9 @@ this.refresh();}
 			this.refresh=function()//show/hide the building display based on its amount, and redraw it
 			{
 				this.price=this.getPrice();
+				if (Game.buyMode==1) this.bulkPrice=this.getSumPrice(Game.buyBulk);
+				else if (Game.buyMode==-1 && Game.buyBulk==-1) this.bulkPrice=this.getReverseSumPrice(1000);
+				else if (Game.buyMode==-1) this.bulkPrice=this.getReverseSumPrice(Game.buyBulk);
 				this.rebuild();
 				if (this.amount==0 && this.id!=0) l('row'+this.id).className='row';
 				else if (this.amount>0 && this.id!=0) l('row'+this.id).className='row enabled';
@@ -4982,7 +5098,7 @@ this.refresh();}
 			{
 				var me=this;
 				//var classes='product';
-				var price=me.price;
+				var price=me.bulkPrice;
 				/*if (Game.cookiesEarned>=me.basePrice || me.bought>0) {classes+=' unlocked';me.locked=0;} else {classes+=' locked';me.locked=1;}
 				if (Game.cookies>=price) classes+=' enabled'; else classes+=' disabled';
 				if (me.l.className.indexOf('toggledOff')!=-1) classes+=' toggledOff';
@@ -5030,7 +5146,7 @@ this.refresh();}
 				l('productIconOff'+me.id).style.backgroundPosition='-'+iconX+'px 0px';
 				l('productName'+me.id).innerHTML=displayName;
 				l('productOwned'+me.id).innerHTML=me.amount?me.amount:'';
-				l('productPrice'+me.id).innerHTML=Beautify(Math.round(me.price));
+				l('productPrice'+me.id).innerHTML=Beautify(Math.round(price));
 			}
 			
 			this.draw=function(){};
@@ -5171,15 +5287,51 @@ this.refresh();}
 			else return 0;
 		}
 		
+		Game.storeBulkButton=function(id)
+		{
+			if (id==0) Game.buyMode=1;
+			else if (id==1) Game.buyMode=-1;
+			else if (id==2) Game.buyBulk=1;
+			else if (id==3) Game.buyBulk=10;
+			else if (id==4) Game.buyBulk=100;
+			else if (id==5) Game.buyBulk=-1;
+			
+			if (Game.buyMode==1 && Game.buyBulk==-1) Game.buyBulk=100;
+			
+			if (Game.buyMode==1) l('storeBulkBuy').className='storeBulkMode selected'; else l('storeBulkBuy').className='storeBulkMode';
+			if (Game.buyMode==-1) l('storeBulkSell').className='storeBulkMode selected'; else l('storeBulkSell').className='storeBulkMode';
+			
+			if (Game.buyBulk==1) l('storeBulk1').className='storeBulkAmount selected'; else l('storeBulk1').className='storeBulkAmount';
+			if (Game.buyBulk==10) l('storeBulk10').className='storeBulkAmount selected'; else l('storeBulk10').className='storeBulkAmount';
+			if (Game.buyBulk==100) l('storeBulk100').className='storeBulkAmount selected'; else l('storeBulk100').className='storeBulkAmount';
+			if (Game.buyBulk==-1) l('storeBulkMax').className='storeBulkAmount selected'; else l('storeBulkMax').className='storeBulkAmount';
+			
+			if (Game.buyMode==1) l('storeBulkMax').style.visibility='hidden'; else l('storeBulkMax').style.visibility='visible';
+			
+			Game.storeToRefresh=1;
+			PlaySound('snd/tick.mp3');
+		}
 		Game.BuildStore=function()//create the DOM for the store's buildings
 		{
 			var str='';
+			str+='<div id="storeBulk">'+
+				'<div id="storeBulkBuy" class="storeBulkMode" '+Game.clickStr+'="Game.storeBulkButton(0);">Buy</div>'+
+				'<div id="storeBulkSell" class="storeBulkMode" '+Game.clickStr+'="Game.storeBulkButton(1);">Sell</div>'+
+				'<div id="storeBulk1" class="storeBulkAmount" '+Game.clickStr+'="Game.storeBulkButton(2);">1</div>'+
+				'<div id="storeBulk10" class="storeBulkAmount" '+Game.clickStr+'="Game.storeBulkButton(3);">10</div>'+
+				'<div id="storeBulk100" class="storeBulkAmount" '+Game.clickStr+'="Game.storeBulkButton(4);">100</div>'+
+				'<div id="storeBulkMax" class="storeBulkAmount" '+Game.clickStr+'="Game.storeBulkButton(5);">all</div>'+
+				'</div>';
 			for (var i in Game.Objects)
 			{
 				var me=Game.Objects[i];
-				str+='<div class="product toggledOff" '+Game.getDynamicTooltip('Game.ObjectsById['+me.id+'].tooltip','store')+' id="product'+me.id+'"><div class="icon off" id="productIconOff'+me.id+'" style=""></div><div class="icon" id="productIcon'+me.id+'" style=""></div><div class="content"><div class="lockedTitle">???</div><div class="title" id="productName'+me.id+'"></div><span class="price" id="productPrice'+me.id+'"></span><div class="title owned" id="productOwned'+me.id+'"></div></div><div class="buySell"><div style="left:0px;" id="buttonBuy10-'+me.id+'">Buy 10</div><div style="left:100px;" id="buttonSell-'+me.id+'">Sell 1</div><div style="left:200px;" id="buttonSellAll-'+me.id+'">Sell all</div></div></div>';
+				str+='<div class="product toggledOff" '+Game.getDynamicTooltip('Game.ObjectsById['+me.id+'].tooltip','store')+' id="product'+me.id+'"><div class="icon off" id="productIconOff'+me.id+'" style=""></div><div class="icon" id="productIcon'+me.id+'" style=""></div><div class="content"><div class="lockedTitle">???</div><div class="title" id="productName'+me.id+'"></div><span class="price" id="productPrice'+me.id+'"></span><div class="title owned" id="productOwned'+me.id+'"></div></div>'+
+				/*'<div class="buySell"><div style="left:0px;" id="buttonBuy10-'+me.id+'">Buy 10</div><div style="left:100px;" id="buttonSell-'+me.id+'">Sell 1</div><div style="left:200px;" id="buttonSellAll-'+me.id+'">Sell all</div></div>'+*/
+				'</div>';
 			}
 			l('products').innerHTML=str;
+			
+			Game.storeBulkButton(-1);
 			
 			var SellAllPrompt=function(id)
 			{
@@ -5194,17 +5346,17 @@ this.refresh();}
 				//these are a bit messy but ah well
 				if (!Game.touchEvents)
 				{
-					AddEvent(me.l,'click',function(what){return function(){Game.ObjectsById[what].buy()};}(me.id));
-					AddEvent(l('buttonBuy10-'+me.id),'click',function(what){return function(e){if (!e) {var e=window.event;}e.cancelBubble=true;if (e.stopPropagation) {e.stopPropagation();}Game.ObjectsById[what].buy(10)};}(me.id));
-					AddEvent(l('buttonSell-'+me.id),'click',function(what){return function(e){if (!e) {var e=window.event;}e.cancelBubble=true;if (e.stopPropagation) {e.stopPropagation();}Game.ObjectsById[what].sell()};}(me.id));
-					AddEvent(l('buttonSellAll-'+me.id),'click',function(what){return function(e){if (!e) {var e=window.event;}e.cancelBubble=true;if (e.stopPropagation) {e.stopPropagation();}SellAllPrompt(what);};}(me.id));
+					AddEvent(me.l,'click',function(what){return function(){Game.ObjectsById[what].buy();};}(me.id));
+					//AddEvent(l('buttonBuy10-'+me.id),'click',function(what){return function(e){if (!e) {var e=window.event;}e.cancelBubble=true;if (e.stopPropagation) {e.stopPropagation();}Game.ObjectsById[what].buy(10)};}(me.id));
+					//AddEvent(l('buttonSell-'+me.id),'click',function(what){return function(e){if (!e) {var e=window.event;}e.cancelBubble=true;if (e.stopPropagation) {e.stopPropagation();}Game.ObjectsById[what].sell()};}(me.id));
+					//AddEvent(l('buttonSellAll-'+me.id),'click',function(what){return function(e){if (!e) {var e=window.event;}e.cancelBubble=true;if (e.stopPropagation) {e.stopPropagation();}SellAllPrompt(what);};}(me.id));
 				}
 				else
 				{
-					AddEvent(me.l,'touchend',function(what){return function(){Game.ObjectsById[what].buy()};}(me.id));
-					AddEvent(l('buttonBuy10-'+me.id),'touchend',function(what){return function(e){if (!e) {var e=window.event;}e.cancelBubble=true;if (e.stopPropagation) {e.stopPropagation();}Game.ObjectsById[what].buy(10)};}(me.id));
-					AddEvent(l('buttonSell-'+me.id),'touchend',function(what){return function(e){if (!e) {var e=window.event;}e.cancelBubble=true;if (e.stopPropagation) {e.stopPropagation();}Game.ObjectsById[what].sell()};}(me.id));
-					AddEvent(l('buttonSellAll-'+me.id),'touchend',function(what){return function(e){if (!e) {var e=window.event;}e.cancelBubble=true;if (e.stopPropagation) {e.stopPropagation();}SellAllPrompt(what);};}(me.id));
+					AddEvent(me.l,'touchend',function(what){return function(){Game.ObjectsById[what].buy();};}(me.id));
+					//AddEvent(l('buttonBuy10-'+me.id),'touchend',function(what){return function(e){if (!e) {var e=window.event;}e.cancelBubble=true;if (e.stopPropagation) {e.stopPropagation();}Game.ObjectsById[what].buy(10)};}(me.id));
+					//AddEvent(l('buttonSell-'+me.id),'touchend',function(what){return function(e){if (!e) {var e=window.event;}e.cancelBubble=true;if (e.stopPropagation) {e.stopPropagation();}Game.ObjectsById[what].sell()};}(me.id));
+					//AddEvent(l('buttonSellAll-'+me.id),'touchend',function(what){return function(e){if (!e) {var e=window.event;}e.cancelBubble=true;if (e.stopPropagation) {e.stopPropagation();}SellAllPrompt(what);};}(me.id));
 				}
 			}
 		}
@@ -5514,170 +5666,169 @@ this.refresh();}
 			this.tier=0;
 			this.buildingTie=0;//of what building is this a tiered upgrade of ?
 			
-			this.getPrice=function()
-			{
-				var price=this.basePrice;
-				if (this.priceFunc) price=this.priceFunc();
-				if (this.pool!='prestige')
-				{
-					if (Game.Has('Toy workshop')) price*=0.95;
-					if (Game.Has('Five-finger discount')) price*=Math.pow(0.99,Game.Objects['Cursor'].amount/100);
-					if (Game.Has('Santa\'s dominion')) price*=0.98;
-					if (Game.Has('Faberge egg')) price*=0.99;
-					if (Game.Has('Divine sales')) price*=0.99;
-					if (Game.hasAura('Master of the Armory')) price*=0.98;
-					if (this.pool=='cookie' && Game.Has('Divine bakeries')) price/=5;
-				}
-				return Math.ceil(price);
-			}
-			
-			this.canBuy=function()
-			{
-				if (Game.cookies>=this.getPrice()) return true; else return false;
-			}
-			
-			this.buy=function(bypass)
-			{
-				var success=0;
-				var cancelPurchase=0;
-				if (this.clickFunction && !bypass) cancelPurchase=!this.clickFunction();
-				if (!cancelPurchase)
-				{
-					if (this.choicesFunction)
-					{
-						if (Game.choiceSelectorOn==this.id)
-						{
-							l('toggleBox').style.display='none';
-							l('toggleBox').innerHTML='';
-							Game.choiceSelectorOn=-1;
-							PlaySound('snd/tick.mp3');
-						}
-						else
-						{
-							Game.choiceSelectorOn=this.id;
-							var choices=this.choicesFunction();
-							if (choices.length>0)
-							{
-								var selected=0;
-								for (var i in choices) {if (choices[i].selected) selected=i;}
-								Game.choiceSelectorChoices=choices;//this is a really dumb way of doing this i am so sorry
-								Game.choiceSelectorSelected=selected;
-								var str='';
-								str+='<div class="close" onclick="Game.UpgradesById['+this.id+'].buy();">x</div>';
-								str+='<h3>'+this.name+'</h3>'+
-								'<div class="line"></div>'+
-								'<h4 id="choiceSelectedName">'+choices[selected].name+'</h4>'+
-								'<div class="line"></div>';
-								
-								for (var i in choices)
-								{
-									var icon=choices[i].icon;
-									str+='<div class="crate enabled'+(i==selected?' highlighted':'')+'" style="opacity:1;float:none;display:inline-block;background-position:'+(-icon[0]*48)+'px '+(-icon[1]*48)+'px;" '+Game.clickStr+'="Game.UpgradesById['+this.id+'].choicesPick('+i+');PlaySound(\'snd/tick.mp3\');Game.choiceSelectorOn=-1;Game.UpgradesById['+this.id+'].buy();" onMouseOut="l(\'choiceSelectedName\').innerHTML=Game.choiceSelectorChoices[Game.choiceSelectorSelected].name;" onMouseOver="l(\'choiceSelectedName\').innerHTML=Game.choiceSelectorChoices['+i+'].name;"'+
-									'></div>';
-								}
-							}
-							l('toggleBox').innerHTML=str;
-							l('toggleBox').style.display='block';
-							l('toggleBox').focus();
-							Game.tooltip.hide();
-							PlaySound('snd/tick.mp3');
-							success=1;
-						}
-					}
-					else if (this.pool!='prestige')
-					{
-						var price=this.getPrice();
-						if (this.canBuy() && !this.bought)
-						{
-							Game.Spend(price);
-							this.bought=1;
-							if (this.buyFunction) this.buyFunction();
-							if (this.toggleInto)
-							{
-								Game.Lock(this.toggleInto);Game.Unlock(this.toggleInto);
-							}
-							Game.upgradesToRebuild=1;
-							Game.recalculateGains=1;
-							if (Game.CountsAsUpgradeOwned(this.pool)) Game.UpgradesOwned++;
-							Game.setOnCrate(0);
-							Game.tooltip.hide();
-							PlaySound('snd/buy'+choose([1,2,3,4])+'.mp3',0.75);
-							success=1;
-						}
-					}
-					else
-					{
-						var price=this.getPrice();
-						if (Game.heavenlyChips>=price && !this.bought)
-						{
-							Game.heavenlyChips-=price;
-							Game.heavenlyChipsSpent+=price;
-							this.unlocked=1;
-							this.bought=1;
-							if (this.buyFunction) this.buyFunction();
-							Game.BuildAscendTree();
-							PlaySound('snd/buy'+choose([1,2,3,4])+'.mp3',0.75);
-							PlaySound('snd/shimmerClick.mp3');
-							//PlaySound('snd/buyHeavenly.mp3');
-							success=1;
-						}
-					}
-				}
-				if (this.bought && this.activateFunction) this.activateFunction();
-				return success;
-			}
-			this.earn=function()//just win the upgrades without spending anything
-			{
-				this.unlocked=1;
-				this.bought=1;
-				if (this.buyFunction) this.buyFunction();
-				Game.upgradesToRebuild=1;
-				Game.recalculateGains=1;
-				if (Game.CountsAsUpgradeOwned(this.pool)) Game.UpgradesOwned++;
-			}
-			this.unlock=function()
-			{
-				this.unlocked=1;
-				Game.upgradesToRebuild=1;
-			}
-			this.lose=function()
-			{
-				this.unlocked=0;
-				this.bought=0;
-				Game.upgradesToRebuild=1;
-				Game.recalculateGains=1;
-				if (Game.CountsAsUpgradeOwned(this.pool)) Game.UpgradesOwned--;
-			}
-			
-			this.toggle=function()//cheating only
-			{
-				if (!this.bought)
-				{
-					this.bought=1;
-					if (this.buyFunction) this.buyFunction();
-					Game.upgradesToRebuild=1;
-					Game.recalculateGains=1;
-					if (Game.CountsAsUpgradeOwned(this.pool)) Game.UpgradesOwned++;
-					PlaySound('snd/buy'+choose([1,2,3,4])+'.mp3',0.75);
-					if (this.pool=='prestige' || this.pool=='debug') PlaySound('snd/shimmerClick.mp3');
-				}
-				else
-				{
-					this.bought=0;
-					Game.upgradesToRebuild=1;
-					Game.recalculateGains=1;
-					if (Game.CountsAsUpgradeOwned(this.pool)) Game.UpgradesOwned--;
-					PlaySound('snd/sell'+choose([1,2,3,4])+'.mp3',0.75);
-					if (this.pool=='prestige' || this.pool=='debug') PlaySound('snd/shimmerClick.mp3');
-				}
-				Game.UpdateMenu();
-			}
-			
 			Game.last=this;
 			Game.Upgrades[this.name]=this;
 			Game.UpgradesById[this.id]=this;
 			Game.UpgradesN++;
 			return this;
+		}
+		
+		Game.Upgrade.prototype.getPrice=function()
+		{
+			var price=this.basePrice;
+			if (this.priceFunc) price=this.priceFunc();
+			if (this.pool!='prestige')
+			{
+				if (Game.Has('Toy workshop')) price*=0.95;
+				if (Game.Has('Five-finger discount')) price*=Math.pow(0.99,Game.Objects['Cursor'].amount/100);
+				if (Game.Has('Santa\'s dominion')) price*=0.98;
+				if (Game.Has('Faberge egg')) price*=0.99;
+				if (Game.Has('Divine sales')) price*=0.99;
+				if (Game.hasAura('Master of the Armory')) price*=0.98;
+				if (this.pool=='cookie' && Game.Has('Divine bakeries')) price/=5;
+			}
+			return Math.ceil(price);
+		}
+		
+		Game.Upgrade.prototype.canBuy=function()
+		{
+			if (Game.cookies>=this.getPrice()) return true; else return false;
+		}
+		
+		Game.Upgrade.prototype.buy=function(bypass)
+		{
+			var success=0;
+			var cancelPurchase=0;
+			if (this.clickFunction && !bypass) cancelPurchase=!this.clickFunction();
+			if (!cancelPurchase)
+			{
+				if (this.choicesFunction)
+				{
+					if (Game.choiceSelectorOn==this.id)
+					{
+						l('toggleBox').style.display='none';
+						l('toggleBox').innerHTML='';
+						Game.choiceSelectorOn=-1;
+						PlaySound('snd/tick.mp3');
+					}
+					else
+					{
+						Game.choiceSelectorOn=this.id;
+						var choices=this.choicesFunction();
+						if (choices.length>0)
+						{
+							var selected=0;
+							for (var i in choices) {if (choices[i].selected) selected=i;}
+							Game.choiceSelectorChoices=choices;//this is a really dumb way of doing this i am so sorry
+							Game.choiceSelectorSelected=selected;
+							var str='';
+							str+='<div class="close" onclick="Game.UpgradesById['+this.id+'].buy();">x</div>';
+							str+='<h3>'+this.name+'</h3>'+
+							'<div class="line"></div>'+
+							'<h4 id="choiceSelectedName">'+choices[selected].name+'</h4>'+
+							'<div class="line"></div>';
+							
+							for (var i in choices)
+							{
+								var icon=choices[i].icon;
+								str+='<div class="crate enabled'+(i==selected?' highlighted':'')+'" style="opacity:1;float:none;display:inline-block;background-position:'+(-icon[0]*48)+'px '+(-icon[1]*48)+'px;" '+Game.clickStr+'="Game.UpgradesById['+this.id+'].choicesPick('+i+');PlaySound(\'snd/tick.mp3\');Game.choiceSelectorOn=-1;Game.UpgradesById['+this.id+'].buy();" onMouseOut="l(\'choiceSelectedName\').innerHTML=Game.choiceSelectorChoices[Game.choiceSelectorSelected].name;" onMouseOver="l(\'choiceSelectedName\').innerHTML=Game.choiceSelectorChoices['+i+'].name;"'+
+								'></div>';
+							}
+						}
+						l('toggleBox').innerHTML=str;
+						l('toggleBox').style.display='block';
+						l('toggleBox').focus();
+						Game.tooltip.hide();
+						PlaySound('snd/tick.mp3');
+						success=1;
+					}
+				}
+				else if (this.pool!='prestige')
+				{
+					var price=this.getPrice();
+					if (this.canBuy() && !this.bought)
+					{
+						Game.Spend(price);
+						this.bought=1;
+						if (this.buyFunction) this.buyFunction();
+						if (this.toggleInto)
+						{
+							Game.Lock(this.toggleInto);Game.Unlock(this.toggleInto);
+						}
+						Game.upgradesToRebuild=1;
+						Game.recalculateGains=1;
+						if (Game.CountsAsUpgradeOwned(this.pool)) Game.UpgradesOwned++;
+						Game.setOnCrate(0);
+						Game.tooltip.hide();
+						PlaySound('snd/buy'+choose([1,2,3,4])+'.mp3',0.75);
+						success=1;
+					}
+				}
+				else
+				{
+					var price=this.getPrice();
+					if (Game.heavenlyChips>=price && !this.bought)
+					{
+						Game.heavenlyChips-=price;
+						Game.heavenlyChipsSpent+=price;
+						this.unlocked=1;
+						this.bought=1;
+						if (this.buyFunction) this.buyFunction();
+						Game.BuildAscendTree();
+						PlaySound('snd/buy'+choose([1,2,3,4])+'.mp3',0.75);
+						PlaySound('snd/shimmerClick.mp3');
+						//PlaySound('snd/buyHeavenly.mp3');
+						success=1;
+					}
+				}
+			}
+			if (this.bought && this.activateFunction) this.activateFunction();
+			return success;
+		}
+		Game.Upgrade.prototype.earn=function()//just win the upgrades without spending anything
+		{
+			this.unlocked=1;
+			this.bought=1;
+			if (this.buyFunction) this.buyFunction();
+			Game.upgradesToRebuild=1;
+			Game.recalculateGains=1;
+			if (Game.CountsAsUpgradeOwned(this.pool)) Game.UpgradesOwned++;
+		}
+		Game.Upgrade.prototype.unlock=function()
+		{
+			this.unlocked=1;
+			Game.upgradesToRebuild=1;
+		}
+		Game.Upgrade.prototype.lose=function()
+		{
+			this.unlocked=0;
+			this.bought=0;
+			Game.upgradesToRebuild=1;
+			Game.recalculateGains=1;
+			if (Game.CountsAsUpgradeOwned(this.pool)) Game.UpgradesOwned--;
+		}
+		Game.Upgrade.prototype.toggle=function()//cheating only
+		{
+			if (!this.bought)
+			{
+				this.bought=1;
+				if (this.buyFunction) this.buyFunction();
+				Game.upgradesToRebuild=1;
+				Game.recalculateGains=1;
+				if (Game.CountsAsUpgradeOwned(this.pool)) Game.UpgradesOwned++;
+				PlaySound('snd/buy'+choose([1,2,3,4])+'.mp3',0.75);
+				if (this.pool=='prestige' || this.pool=='debug') PlaySound('snd/shimmerClick.mp3');
+			}
+			else
+			{
+				this.bought=0;
+				Game.upgradesToRebuild=1;
+				Game.recalculateGains=1;
+				if (Game.CountsAsUpgradeOwned(this.pool)) Game.UpgradesOwned--;
+				PlaySound('snd/sell'+choose([1,2,3,4])+'.mp3',0.75);
+				if (this.pool=='prestige' || this.pool=='debug') PlaySound('snd/shimmerClick.mp3');
+			}
+			Game.UpdateMenu();
 		}
 		
 		Game.CountsAsUpgradeOwned=function(pool)
@@ -5735,6 +5886,7 @@ this.refresh();}
 		
 		Game.Has=function(what)
 		{
+			if (Game.ascensionMode==1 && Game.Upgrades[what].pool=='prestige') return 0;
 			return (Game.Upgrades[what]?Game.Upgrades[what].bought:0);
 		}
 		Game.HasUnlocked=function(what)
@@ -5757,9 +5909,11 @@ this.refresh();}
 			}
 			var sortMap=function(a,b)
 			{
-				if (a.pool=='toggle' || b.pool=='toggle') return 0;
-				var ap=a.getPrice();
-				var bp=b.getPrice();
+				//if (a.pool=='toggle' || b.pool=='toggle') return 0;
+				//var ap=a.getPrice();
+				//var bp=b.getPrice();
+				var ap=a.pool=='toggle'?0:a.getPrice();
+				var bp=b.pool=='toggle'?0:b.getPrice();
 				if (ap>bp) return 1;
 				else if (ap<bp) return -1;
 				else return 0;
@@ -7002,7 +7156,7 @@ this.refresh();}
 		new Game.Achievement('From scratch','Ascend with <b>1 trillion</b> cookies baked.<q>It\'s been fun.</q>',[11,6]);
 		
 		order=11010;
-		new Game.Achievement('Neverclick','Make <b>1 million</b> cookies by only having clicked <b>15 times</b>.<div class="warning">Disabled until challenge runs are added.</div>',[12,0]);Game.last.pool='shadow';
+		new Game.Achievement('Neverclick','Make <b>1 million</b> cookies by only having clicked <b>15 times</b>.',[12,0]);Game.last.pool='shadow';
 		order=1000;
 		new Game.Achievement('Clicktastic','Make <b>1,000</b> cookies from clicking.',[11,0]);
 		new Game.Achievement('Clickathlon','Make <b>100,000</b> cookies from clicking.',[11,1]);
@@ -7086,7 +7240,7 @@ this.refresh();}
 		order=10000;
 		new Game.Achievement('Fortune','Click <b>77 golden cookies</b>.<q>You should really go to bed.</q>',[24,6]);
 		order=31000;
-		new Game.Achievement('True Neverclick','Make <b>1 million</b> cookies with <b>no</b> cookie clicks.<div class="warning">Disabled until challenge runs are added.</div><q>This kinda defeats the whole purpose, doesn\'t it?</q>',[12,0]);Game.last.pool='shadow';
+		new Game.Achievement('True Neverclick','Make <b>1 million</b> cookies with <b>no</b> cookie clicks.<q>This kinda defeats the whole purpose, doesn\'t it?</q>',[12,0]);Game.last.pool='shadow';
 		
 		order=20000;
 		new Game.Achievement('Elder nap','Appease the grandmatriarchs at least <b>once</b>.<q>we<br>are<br>eternal</q>',[8,9]);
@@ -7120,12 +7274,12 @@ this.refresh();}
 		new Game.Achievement('Centennial','Have at least <b>100 of everything</b>.',[6,6]);
 		
 		order=30500;
-		new Game.Achievement('Hardcore','Get to <b>1 billion</b> cookies baked with <b>no upgrades purchased</b>.<div class="warning">Disabled until challenge runs are added.</div>',[12,6]);Game.last.pool='shadow';
+		new Game.Achievement('Hardcore','Get to <b>1 billion</b> cookies baked with <b>no upgrades purchased</b>.',[12,6]);Game.last.pool='shadow';
 		
 		order=30600;
-		new Game.Achievement('Speed baking I','Get to <b>1 million</b> cookies baked in <b>35 minutes</b> (with no heavenly upgrades).<div class="warning">Disabled until challenge runs are added.</div>',[12,5]);Game.last.pool='shadow';
-		new Game.Achievement('Speed baking II','Get to <b>1 million</b> cookies baked in <b>25 minutes</b> (with no heavenly upgrades).<div class="warning">Disabled until challenge runs are added.</div>',[13,5]);Game.last.pool='shadow';
-		new Game.Achievement('Speed baking III','Get to <b>1 million</b> cookies baked in <b>15 minutes</b> (with no heavenly upgrades).<div class="warning">Disabled until challenge runs are added.</div>',[14,5]);Game.last.pool='shadow';
+		new Game.Achievement('Speed baking I','Get to <b>1 million</b> cookies baked in <b>35 minutes</b>.',[12,5]);Game.last.pool='shadow';
+		new Game.Achievement('Speed baking II','Get to <b>1 million</b> cookies baked in <b>25 minutes</b>.',[13,5]);Game.last.pool='shadow';
+		new Game.Achievement('Speed baking III','Get to <b>1 million</b> cookies baked in <b>15 minutes</b>.',[14,5]);Game.last.pool='shadow';
 		
 		
 		order=61000;
@@ -7535,7 +7689,7 @@ this.refresh();}
 			for (var i in Game.wrinklers)
 			{
 				var me=Game.wrinklers[i];
-				if (me.phase==0 && Game.elderWrath>0 && n<max)
+				if (me.phase==0 && Game.elderWrath>0 && n<max && me.id<max)
 				{
 					var chance=0.00001*Game.elderWrath;
 					if (Game.Has('Unholy bait')) chance*=5;
@@ -9073,11 +9227,16 @@ this.refresh();}
 				var timePlayed=new Date();
 				timePlayed.setTime(Date.now()-Game.startDate);
 				
-				if (Game.cookiesEarned>=1000000 && !Game.Has('Heavenly chip secret') && 1==0)//add again with challenge runs
+				
+				if (Game.cookiesEarned>=1000000 && (Game.ascensionMode==1 || Game.resets==0))//challenge run or hasn't ascended yet
 				{
 					if (timePlayed<=1000*60*35) Game.Win('Speed baking I');
 					if (timePlayed<=1000*60*25) Game.Win('Speed baking II');
 					if (timePlayed<=1000*60*15) Game.Win('Speed baking III');
+					
+					if (Game.cookieClicks<=15) Game.Win('Neverclick');
+					if (Game.cookieClicks<=0) Game.Win('True Neverclick');
+					if (Game.cookiesEarned>=1000000000 && Game.UpgradesOwned==0) Game.Win('Hardcore');
 				}
 				
 				for (var i in Game.UnlockAt)
@@ -9110,7 +9269,7 @@ this.refresh();}
 					if (eggs>=Game.easterEggs.length) Game.Win('Hide & seek champion');
 				}
 				
-				if (Game.prestige>0)
+				if (Game.prestige>0 && Game.ascensionMode!=1)
 				{
 					Game.Unlock('Heavenly chip secret');
 					if (Game.Has('Heavenly chip secret')) Game.Unlock('Heavenly cookie stand');
@@ -9144,11 +9303,7 @@ this.refresh();}
 				if (minAmount>=150) {Game.Win('Centennial and a half');Game.Unlock('Dark chocolate butter biscuit');}
 				if (minAmount>=200) {Game.Win('Bicentennial');Game.Unlock('White chocolate butter biscuit');}
 				if (minAmount>=250) {Game.Win('Bicentennial and a half');Game.Unlock('Ruby chocolate butter biscuit');}
-				if (1==0)
-				{//these are disabled for now until I add challenge/vanilla runs, sorry !
-					if (Game.cookiesEarned>=1000000 && Game.cookieClicks<=15) Game.Win('Neverclick');
-					if (Game.cookiesEarned>=1000000 && Game.cookieClicks<=0) Game.Win('True Neverclick');
-				}
+				
 				if (Game.handmadeCookies>=1000) {Game.Win('Clicktastic');Game.Unlock('Plastic mouse');}
 				if (Game.handmadeCookies>=100000) {Game.Win('Clickathlon');Game.Unlock('Iron mouse');}
 				if (Game.handmadeCookies>=10000000) {Game.Win('Clickolympics');Game.Unlock('Titanium mouse');}
@@ -9184,11 +9339,6 @@ this.refresh();}
 				if (Game.UpgradesOwned>=100) Game.Win('Upgrader');
 				if (Game.UpgradesOwned>=200) Game.Win('Lord of Progress');
 				if (buildingsOwned>=3000 && Game.UpgradesOwned>=300) Game.Win('Polymath');
-				
-				if (1==0)
-				{
-					if (Game.UpgradesOwned==0 && Game.cookiesEarned>=1000000000) Game.Win('Hardcore');
-				}
 				
 				if (Game.cookiesEarned>=10000000000000 && !Game.HasAchiev('You win a cookie')) {Game.Win('You win a cookie');Game.Earn(1);}
 				
@@ -9253,7 +9403,7 @@ this.refresh();}
 			Game.cookiesd+=(Game.cookies-Game.cookiesd)*0.3;
 			
 			if (Game.storeToRefresh) Game.RefreshStore();
-			if (Game.upgradesToRebuild || Game.T%60==0) Game.RebuildUpgrades();
+			if (Game.upgradesToRebuild) Game.RebuildUpgrades();
 			
 			Game.goldenCookie.update();
 			Game.seasonPopup.update();
@@ -9409,9 +9559,9 @@ this.refresh();}
 					
 					//make products full-opacity if we can buy them
 					var classes='product';
-					var price=me.price;
+					var price=me.bulkPrice;
 					if (Game.cookiesEarned>=me.basePrice || me.bought>0) {classes+=' unlocked';lastLocked=0;me.locked=0;} else {classes+=' locked';lastLocked++;me.locked=1;}
-					if (Game.cookies>=price) classes+=' enabled'; else classes+=' disabled';
+					if ((Game.buyMode==1 && Game.cookies>=price) || (Game.buyMode==-1 && me.amount>0)) classes+=' enabled'; else classes+=' disabled';
 					if (lastLocked>2) classes+=' toggledOff';
 					me.l.className=classes;
 					//if (me.id>0) {l('productName'+me.id).innerHTML=Beautify(me.storedTotalCps/Game.ObjectsById[me.id-1].storedTotalCps,2);}
@@ -9469,8 +9619,7 @@ this.refresh();}
 		for (var i in Game.customDraw) {Game.customDraw[i]();}
 		
 		Game.drawT++;
-		
-		requestAnimationFrame(Game.Draw);
+		if (Game.prefs.altDraw) requestAnimationFrame(Game.Draw);
 	}
 	
 	/*=====================================================================================
@@ -9498,11 +9647,13 @@ this.refresh();}
 		Game.catchupLogic=0;
 		Timer.track('logic');
 		Timer.say('END LOGIC');
-		/*Timer.say('DRAW');
-		
-		if (document.hasFocus() || Game.prefs.focus || Game.T%5==0) Game.Draw();
-		
-		Timer.say('END DRAW');*/
+		if (!Game.prefs.altDraw)
+		{
+			Timer.say('DRAW');
+			if (document.hasFocus() || Game.prefs.focus || Game.loopT%10==0) Game.Draw();
+			//if (document.hasFocus() || Game.loopT%5==0) Game.Draw();
+			Timer.say('END DRAW');
+		}
 		
 		if (Game.sesame)
 		{
@@ -9515,6 +9666,7 @@ this.refresh();}
 		}
 		Timer.reset();
 		
+		Game.loopT++;
 		setTimeout(Game.Loop,1000/Game.fps);
 	}
 }
