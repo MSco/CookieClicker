@@ -335,7 +335,7 @@ Game={};
 
 Game.Launch=function()
 {
-	Game.version=1.0465;
+	Game.version=1.0466;
 	Game.beta=0;
 	if (window.location.href.indexOf('/beta')>-1) Game.beta=1;
 	Game.mobile=0;
@@ -343,7 +343,21 @@ Game.Launch=function()
 	//if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) Game.mobile=1;
 	if (Game.mobile) Game.touchEvents=1;
 	
-	Game.baseSeason='easter';//halloween, christmas, valentines, fools, easter
+	Game.baseSeason='';//halloween, christmas, valentines, fools, easter
+	//automatic season detection (might not be 100% accurate)
+	var day=Math.floor((new Date()-new Date(new Date().getFullYear(),0,0))/(1000*60*60*24));
+	if (day>=41 && day<=46) Game.baseSeason='valentines';
+	else if (day>=90 && day<=92) Game.baseSeason='fools';
+	else if (day>=304-7 && day<=304) Game.baseSeason='halloween';
+	else if (day>=349 && day<=365) Game.baseSeason='christmas';
+	else
+	{
+		//easter is a pain goddamn
+		var easterDay=function(Y){var C = Math.floor(Y/100);var N = Y - 19*Math.floor(Y/19);var K = Math.floor((C - 17)/25);var I = C - Math.floor(C/4) - Math.floor((C - K)/3) + 19*N + 15;I = I - 30*Math.floor((I/30));I = I - Math.floor(I/28)*(1 - Math.floor(I/28)*Math.floor(29/(I + 1))*Math.floor((21 - N)/11));var J = Y + Math.floor(Y/4) + I + 2 - C + Math.floor(C/4);J = J - 7*Math.floor(J/7);var L = I - J;var M = 3 + Math.floor((L + 40)/44);var D = L + 28 - 31*Math.floor(M/4);return new Date(Y,M-1,D);}(new Date().getFullYear());
+		easterDay=Math.floor((easterDay-new Date(easterDay.getFullYear(),0,0))/(1000*60*60*24));
+		if (day>=easterDay-7 && day<=easterDay) Game.baseSeason='easter';
+	}
+	
 	
 	Game.updateLog=
 	'<div class="section">Updates</div>'+
@@ -359,8 +373,13 @@ Game.Launch=function()
 	'<div class="listing">-more buildings and upgrades!</div>'+
 	'<div class="listing">-revamping the prestige system!</div>'+
 	'<div class="listing">-mobile app!</div>'+
-	'<div class="listing"><span class="warning">Note : this game is updated fairly frequently, which often involves rebalancing. Expect to see prices and cookies/second vary wildly from one update to another!</span></div>'+
 	'<div class="listing"><span class="warning">Note : if you find a new bug after an update and you\'re using a 3rd-party add-on, make sure it\'s not just your add-on causing it!</span></div>'+
+	
+	'</div><div class="subsection update small">'+
+	'<div class="title">30/10/2014 - a moveable feast</div>'+
+	'<div class="listing">-just a quick patch for automatic season-checking; Halloween, Christmas and others should now trigger automatically</div>'+
+	'<div class="listing">-still working on prestige update!</div>'+
+	'<div class="listing">-we\'ve been working with Artix on a dragon-themed mobile idle game, <a href="http://aqdragons.com/" target="_blank">AdventureQuest Dragons</a>! Stay tuned!</div>'+
 	
 	'</div><div class="subsection update small">'+
 	'<div class="title">18/05/2014 - better late than easter</div>'+
@@ -600,6 +619,14 @@ Game.Launch=function()
 		Game.Loader.loaded=Game.Init;
 		Game.Loader.Load(['filler.png']);
 	}
+	Game.ErrorFrame=function()
+	{
+		l('javascriptError').innerHTML=
+		'<div class="title">Oops. Wrong address!</div>'+
+		'<div>It looks like you\'re accessing Cookie Clicker from another URL than the official one.<br>'+
+		'You can <a href="http://orteil.dashnet.org/cookieclicker/" target="_blank">play Cookie Clicker over here</a>!<br>'+
+		'<small>(If for any reasons, you are unable to access the game on the official URL, we are currently working on a second domain.)</small></div>';
+	}
 	
 	
 	Game.Init=function()
@@ -623,10 +650,10 @@ Game.Launch=function()
 		}
 		Game.clickStr=Game.touchEvents?'ontouchend':'onclick';
 		
-		Game.SaveTo='CookieClickerGame';
+		Game.SaveTo='CookieClickerGamev10466';
 		if (Game.beta) Game.SaveTo='CookieClickerGameBeta';
 		l('versionNumber').innerHTML='v.'+Game.version+(Game.beta?' <span style="color:#ff0;">beta</span>':'');
-		l('links').innerHTML=(Game.beta?'<a href="../" target="blank">Live version</a> | ':'<a href="beta" target="blank">Try the beta!</a> | ')+'<a href="http://orteil.dashnet.org/experiments/cookie/" target="blank">Classic</a>';
+		l('links').innerHTML='<a href="../" target="blank">Live version</a> | <a href="beta" target="blank">Try the beta!</a> | <a href="http://orteil.dashnet.org/experiments/cookie/" target="blank">Classic</a>';
 		//l('links').innerHTML='<a href="http://orteil.dashnet.org/experiments/cookie/" target="blank">Cookie Clicker Classic</a>';
 		
 		//latency compensator stuff
@@ -6287,5 +6314,10 @@ Game.Launch();
 
 window.onload=function()
 {
-	if (!Game.ready) Game.Load();
+	
+	if (!Game.ready)
+	{
+		if (top!=self) Game.ErrorFrame();
+		else Game.Load();
+	}
 };
