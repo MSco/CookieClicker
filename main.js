@@ -335,8 +335,8 @@ Game={};
 
 Game.Launch=function()
 {
-	Game.version=1.0462;
-	Game.beta=1;
+	Game.version=1.0464;
+	Game.beta=0;
 	Game.mobile=0;
 	Game.touchEvents=0;
 	//if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) Game.mobile=1;
@@ -362,9 +362,10 @@ Game.Launch=function()
 	'<div class="listing"><span class="warning">Note : if you find a new bug after an update and you\'re using a 3rd-party add-on, make sure it\'s not just your add-on causing it!</span></div>'+
 	
 	'</div><div class="subsection update small">'+
-	'<div class="title">16/05/2014 - better late than easter</div>'+
+	'<div class="title">18/05/2014 - better late than easter</div>'+
 	'<div class="listing">-bunnies and eggs, somehow</div>'+
 	'<div class="listing">-prompts now have keyboard shortcuts like system prompts would</div>'+
+	'<div class="listing">-naming your bakery? you betcha</div>'+
 	'<div class="listing">-"Fast notes" option to make all notifications close faster; new button to close all notifications</div>'+
 	'<div class="listing">-the dungeons beta is now available on <a href="http://orteil.dashnet.org/cookieclicker/betadungeons" target="_blank">/betadungeons</a></div>'+
 	
@@ -1762,6 +1763,7 @@ Game.Launch=function()
 			var m=15;
 			if (Game.Has('Lucky day')) m/=2;
 			if (Game.Has('Serendipity')) m/=2;
+			if (Game.Has('Golden goose egg')) m*=0.95;
 			if (this.chain>0) m=0.05;
 			if (Game.Has('Gold hoard')) m=0.01;
 			return Math.ceil(Game.fps*60*m);
@@ -2016,7 +2018,7 @@ Game.Launch=function()
 				}
 				
 				
-				Game.DropEgg(0.95);
+				Game.DropEgg(0.9);
 				
 				me.minTime=me.getMinTime();
 				me.maxTime=me.getMaxTime();
@@ -4671,13 +4673,19 @@ Game.Launch=function()
 		Game.DropEgg=function(failRate)
 		{
 			if (Game.season!='easter') return;
-			if (Game.HasAchiev('Hide & seek champion')) failRate*=0.8;
+			if (Game.HasAchiev('Hide & seek champion')) failRate*=0.7;
 			if (Game.Has('Omelette')) failRate*=0.9;
 			if (Game.Has('Santa\'s bottomless bag')) failRate*=0.9;
 			if (Math.random()>=failRate)
 			{
-				if (Math.random()<0.1) var drop=choose(Game.rareEggDrops);
-				else var drop=choose(Game.eggDrops);
+				var drop='';
+				if (Math.random()<0.1) drop=choose(Game.rareEggDrops);
+				else drop=choose(Game.eggDrops);
+				if (Game.Has(drop) || Game.HasUnlocked(drop))//reroll if we have it
+				{
+					if (Math.random()<0.1) drop=choose(Game.rareEggDrops);
+					else drop=choose(Game.eggDrops);
+				}
 				if (Game.Has(drop) || Game.HasUnlocked(drop)) return;
 				Game.Unlock(drop);
 				if (Game.prefs.popups) Game.Popup('You find :<br>'+drop+'!');
@@ -5304,7 +5312,7 @@ Game.Launch=function()
 					me.hurt=0;
 					me.hp=3;
 					me.sucked*=1.1;//cookie dough does weird things inside wrinkler digestive tracts
-					if (Game.Has('Wrinklespawn')) me.sucked*=1.05;
+					if (Game.Has('Wrinklerspawn')) me.sucked*=1.05;
 					if (me.sucked>0.5)
 					{
 						if (Game.prefs.popups) Game.Popup('Exploded a wrinkler : found '+Beautify(me.sucked)+' cookies!');
@@ -5327,7 +5335,7 @@ Game.Launch=function()
 								}
 							}
 						}
-						Game.DropEgg(0.95);
+						Game.DropEgg(0.98);
 					}
 					Game.Earn(me.sucked);
 					me.sucked=0;
