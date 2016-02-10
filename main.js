@@ -451,8 +451,8 @@ var Game={};
 
 Game.Launch=function()
 {
-	Game.version=1.909;
-	Game.beta=1;
+	Game.version=2;
+	Game.beta=0;
 	if (window.location.href.indexOf('/beta')>-1) Game.beta=1;
 	Game.mobile=0;
 	Game.touchEvents=0;
@@ -489,6 +489,21 @@ Game.Launch=function()
 	
 	'</div><div class="subsection">'+
 	'<div class="title">Version history</div>'+
+	
+	'</div><div class="subsection update">'+
+	'<div class="title">08/02/2016 - legacy</div>'+
+	'<div class="listing"><b>Everything that was implemented during the almost 2-year-long beta has been added to the live game. To recap :</b></div>'+
+	'<div class="listing">&bull; 3 new buildings : banks, temples, and wizard towers; these have been added in-between existing buildings and as such, may disrupt some building-related achievements</div>'+
+	'<div class="listing">&bull; the ascension system has been redone from scratch, with a new heavenly upgrade tree</div>'+
+	'<div class="listing">&bull; mysterious new features such as angel-powered offline progression, challenge runs, and a cookie dragon</div>'+
+	'<div class="listing">&bull; sounds have been added (can be disabled in the options)</div>'+
+	'<div class="listing">&bull; heaps of rebalancing and bug fixes</div>'+
+	'<div class="listing">&bull; a couple more upgrades and achievements, probably</div>'+
+	'<div class="listing">&bull; fresh new options to further customize your cookie-clicking experience</div>'+
+	'<div class="listing">&bull; quality-of-life improvements : better bulk-buy, better switches etc</div>'+
+	'<div class="listing">&bull; added some <a href="http://en.wikipedia.org/wiki/'+choose(['Krzysztof_Arciszewski','Eustachy_Sanguszko','Maurycy_Hauke','Karol_Turno','Tadeusz_Kutrzeba','Kazimierz_Fabrycy','Florian_Siwicki'])+'" target="_blank">general polish</a></div>'+/* i liked this dumb pun too much to let it go unnoticed */
+	'<div class="listing">&bull; tons of other little things we can\'t even remember right now</div>'+
+	'<div class="listing">Miss the old version? Your old save was automatically exported <a href="http://orteil.dashnet.org/cookieclicker/v10466/" target="_blank">here</a>!</div>'+
 	
 	'</div><div class="subsection update small">'+
 	'<div class="title">05/02/2016 - legacy beta, more fixes</div>'+
@@ -834,7 +849,7 @@ Game.Launch=function()
 		
 		Game.SaveTo='CookieClickerGame';
 		if (Game.beta) Game.SaveTo='CookieClickerGameBeta';
-		l('versionNumber').innerHTML='v.'+Game.version+(Game.beta?' <span style="color:#ff0;">beta</span>':'');
+		l('versionNumber').innerHTML='v. '+Game.version+(Game.beta?' <span style="color:#ff0;">beta</span>':'');
 		
 		if (Game.beta) {var me=l('linkVersionBeta');me.parentNode.removeChild(me);}
 		else if (Game.version==1.0466) {var me=l('linkVersionOld');me.parentNode.removeChild(me);}
@@ -1091,7 +1106,7 @@ Game.Launch=function()
 			}
 			else if (parseFloat(r[0])>Game.version)
 			{
-				str='<b>New version available : v.'+r[0]+'!</b>';
+				str='<b>New version available : v. '+r[0]+'!</b>';
 				if (r[1]) str+='<br><small>Update note : "'+r[1]+'"</small>';
 				str+='<br><b>Refresh to get it!</b>';
 			}
@@ -1374,8 +1389,8 @@ Game.Launch=function()
 					}
 					if (version>=1 && version>Game.version)
 					{
-						if (Game.prefs.popups) Game.Popup('Error : you are attempting to load a save from a future version (v.'+version+'; you are using v.'+Game.version+').');
-						else Game.Notify('Error importing save','You are attempting to load a save from a future version (v.'+version+'; you are using v.'+Game.version+').','',6,1);
+						if (Game.prefs.popups) Game.Popup('Error : you are attempting to load a save from a future version (v. '+version+'; you are using v. '+Game.version+').');
+						else Game.Notify('Error importing save','You are attempting to load a save from a future version (v. '+version+'; you are using v. '+Game.version+').','',6,1);
 						return false;
 					}
 					if (version==1.0501)//prompt if we loaded from the 2014 beta
@@ -3988,8 +4003,8 @@ Game.Launch=function()
 				str+='<div class="section">Options</div>'+
 				'<div class="subsection">'+
 				'<div class="title">General</div>'+
-				'<div class="listing"><a class="option" '+Game.clickStr+'="Game.WriteSave();PlaySound(\'snd/tick.mp3\');">Save</a><label>Save manually (the game autosaves every 60 seconds)</label></div>'+
-				'<div class="listing"><a class="option" '+Game.clickStr+'="Game.ExportSave();PlaySound(\'snd/tick.mp3\');">Export save</a><a class="option" '+Game.clickStr+'="Game.ImportSave();PlaySound(\'snd/tick.mp3\');">Import save</a><label>You can use this to backup your save or to transfer it to another computer</label></div>'+
+				'<div class="listing"><a class="option" '+Game.clickStr+'="Game.WriteSave();PlaySound(\'snd/tick.mp3\');">Save</a><label>Save manually (the game autosaves every 60 seconds; shortcut : ctrl+S)</label></div>'+
+				'<div class="listing"><a class="option" '+Game.clickStr+'="Game.ExportSave();PlaySound(\'snd/tick.mp3\');">Export save</a><a class="option" '+Game.clickStr+'="Game.ImportSave();PlaySound(\'snd/tick.mp3\');">Import save</a><label>You can use this to backup your save or to transfer it to another computer (shortcut for import : ctrl+O)</label></div>'+
 				'<div class="listing"><a class="option" '+Game.clickStr+'="Game.FileSave();PlaySound(\'snd/tick.mp3\');">Save to file</a><a class="option" style="position:relative;"><input id="FileLoadInput" type="file" style="cursor:pointer;opacity:0;position:absolute;left:0px;top:0px;width:100%;height:100%;" onchange="Game.FileLoad(event);" '+Game.clickStr+'="PlaySound(\'snd/tick.mp3\');"/>Load from file</a><label><b>Experimental</b> - use this to keep backups on your computer</label></div>'+
 				
 				'<div class="listing"><a class="option warning" '+Game.clickStr+'="Game.HardReset();PlaySound(\'snd/tick.mp3\');">Wipe save</a><label>Delete all your progress, including your achievements</label></div>'+
@@ -4945,7 +4960,7 @@ Game.Launch=function()
 						sold++;
 						moni+=price;
 						Game.cookies+=price;
-						Game.cookiesEarned=Math.max(Game.cookies,Game.cookiesEarned);
+						Game.cookiesEarned=Math.max(Game.cookies,Game.cookiesEarned);//this is to avoid players getting the cheater achievement when selling buildings that have a higher price than they used to
 						this.amount--;
 						price=this.getPrice();
 						this.price=price;
