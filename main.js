@@ -367,7 +367,7 @@ Game={};
 
 Game.Launch=function()
 {
-	Game.version=1.05;
+	Game.version=1.0501;
 	Game.beta=1;
 	if (window.location.href.indexOf('/beta')>-1) Game.beta=1;
 	Game.mobile=0;
@@ -1698,7 +1698,7 @@ Game.Launch=function()
 			var notEnough=0;
 			if (amount>0)
 			{
-				if (amount>Game.heavenlyChips*10) notEnough=1;
+				if (amount*10>Game.heavenlyChips) notEnough=1;
 				else {Game.heavenlyCookies+=amount;Game.heavenlyChips-=amount*10;Game.heavenlyChipsSpent+=amount*10;}
 			}
 			Game.Prompt('<h3>Bake heavenly chips into heavenly cookies</h3>'+
@@ -1709,9 +1709,9 @@ Game.Launch=function()
 				'<div style="text-align:center;font-size:16px;padding:12px;" class="title">Heavenly cookies : '+Beautify(Game.heavenlyCookies)+'</div>'+
 				'<div class="block"><p>You may bake some of your heavenly chips into <b>heavenly cookies</b>. It takes <b>10 chips</b> to make one cookie, but each cookie will grant you a permanent <b>+1% CpS</b>.</p></div>'+
 				'<div class="block" style="text-align:center;"><div style="font-weight:bold;margin-bottom:8px;">How many cookies will you bake?</div><input type="text" id="valuePrompt" style="text-align:center;width:50%;padding:16px 8px;"/></div>'
-				,[['Bake','var n=parseInt(l(\'valuePrompt\').value.replace(/,/g,\'\'));Game.BakeHeavenlyCookies(n);'],'Close'],0,'widePrompt');
+				,[['Bake','var n=parseInt(l(\'valuePrompt\').value.replace(/,/g,\'\'));Game.ClosePrompt();Game.BakeHeavenlyCookies(n);'],'Close'],0,'widePrompt');
+				l('valuePrompt').focus();
 		}
-		
 		
 		Game.DebuggingPrestige=0;
 		Game.AscendDragX=0;
@@ -2028,6 +2028,15 @@ Game.Launch=function()
 		{
 			Game.cookiesPs=0;
 			var mult=1;
+			
+			var heavenlyMult=0;
+			if (Game.Has('Heavenly chip secret')) heavenlyMult+=0.05;
+			if (Game.Has('Heavenly cookie stand')) heavenlyMult+=0.20;
+			if (Game.Has('Heavenly bakery')) heavenlyMult+=0.25;
+			if (Game.Has('Heavenly confectionery')) heavenlyMult+=0.25;
+			if (Game.Has('Heavenly key')) heavenlyMult+=0.25;
+			mult+=parseFloat(Game.heavenlyCookies)*0.1*heavenlyMult;
+			
 			for (var i in Game.Upgrades)
 			{
 				var me=Game.Upgrades[i];
@@ -2049,14 +2058,6 @@ Game.Launch=function()
 			if (Game.Has('Santa\'s dominion')) mult*=1.2;
 			
 			if (Game.Has('Santa\'s legacy')) mult*=(Game.santaLevel+1)*0.05;
-			
-			var heavenlyMult=0;
-			if (Game.Has('Heavenly chip secret')) heavenlyMult+=0.05;
-			if (Game.Has('Heavenly cookie stand')) heavenlyMult+=0.20;
-			if (Game.Has('Heavenly bakery')) heavenlyMult+=0.25;
-			if (Game.Has('Heavenly confectionery')) heavenlyMult+=0.25;
-			if (Game.Has('Heavenly key')) heavenlyMult+=0.25;
-			mult+=parseFloat(Game.heavenlyCookies)*0.1*heavenlyMult;
 			
 			for (var i in Game.Objects)
 			{
@@ -2309,7 +2310,7 @@ Game.Launch=function()
 				if (choice!='chain cookie') me.chain=0;
 				if (choice=='frenzy')
 				{
-					var time=77*Game.goldenCookie.getEffectDurMod();
+					var time=Math.ceil(77*Game.goldenCookie.getEffectDurMod());
 					Game.frenzy=Game.fps*time;
 					Game.frenzyPower=7;
 					Game.frenzyMax=Game.frenzy;
@@ -2331,7 +2332,7 @@ Game.Launch=function()
 				}
 				else if (choice=='blood frenzy')
 				{
-					var time=6*Game.goldenCookie.getEffectDurMod();
+					var time=Math.ceil(6*Game.goldenCookie.getEffectDurMod());
 					Game.frenzy=Game.fps*time;//*2;//we shouldn't need *2 but I keep getting reports of it lasting only 3 seconds
 					Game.frenzyPower=666;
 					Game.frenzyMax=Game.frenzy;
@@ -2340,7 +2341,7 @@ Game.Launch=function()
 				}
 				else if (choice=='clot')
 				{
-					var time=66*Game.goldenCookie.getEffectDurMod();
+					var time=Math.ceil(66*Game.goldenCookie.getEffectDurMod());
 					Game.frenzy=Game.fps*time;
 					Game.frenzyPower=0.5;
 					Game.frenzyMax=Game.frenzy;
@@ -2349,7 +2350,7 @@ Game.Launch=function()
 				}
 				else if (choice=='click frenzy')
 				{
-					var time=13*Game.goldenCookie.getEffectDurMod();
+					var time=Math.ceil(13*Game.goldenCookie.getEffectDurMod());
 					Game.clickFrenzy=Game.fps*time;
 					Game.clickFrenzyMax=Game.clickFrenzy;
 					Game.recalculateGains=1;
@@ -3323,8 +3324,8 @@ Game.Launch=function()
 				'</div><div class="subsection">'+
 				'<div class="title">Prestige</div>'+
 				//'<div class="listing"><div class="icon" style="background-position:'+(-19*48)+'px '+(-7*48)+'px;"></div> <span style="vertical-align:100%;"><span class="title" style="font-size:22px;">'+Beautify(Game.heavenlyCookies)+' heavenly cookie'+(Game.heavenlyCookies==1?'':'s')+'</span> at '+heavenlyMult+'% of their potential (+'+Beautify(Game.heavenlyCookies*1*heavenlyMult/100,1)+'% CpS)</span></div>'):'')+
-				'<div class="listing"><div class="icon" style="background-position:'+(-19*48)+'px '+(-7*48)+'px;"></div> <span style="vertical-align:100%;"><span class="title" style="font-size:22px;">'+Beautify(Game.heavenlyChips)+' heavenly chip'+(Game.heavenlyChips==1?'':'s')+'</span> (total earned : '+Game.heavenlyChipsEarned+')</span></div>'+
-				(Game.heavenlyCookies>0?('<div class="listing"><div class="icon" style="background-position:'+(-20*48)+'px '+(-7*48)+'px;"></div> <span style="vertical-align:100%;"><span class="title" style="font-size:22px;">'+Beautify(Game.heavenlyCookies)+' heavenly cookie'+(Game.heavenlyCookies==1?'':'s')+'</span> at '+heavenlyMult+'% of their potential (+'+Beautify(Game.heavenlyCookies*1*heavenlyMult/100,1)+'% CpS)</span></div>'+
+				'<div class="listing"><div class="icon" style="background-position:'+(-19*48)+'px '+(-7*48)+'px;"></div> <span style="vertical-align:100%;"><span class="title" style="font-size:22px;">'+Beautify(Game.heavenlyChips)+' heavenly chip'+(Game.heavenlyChips==1?'':'s')+'</span> (total earned : '+Beautify(Game.heavenlyChipsEarned)+')</span></div>'+
+				(Game.heavenlyCookies>0?('<div class="listing"><div class="icon" style="background-position:'+(-20*48)+'px '+(-7*48)+'px;"></div> <span style="vertical-align:100%;"><span class="title" style="font-size:22px;">'+Beautify(Game.heavenlyCookies)+' heavenly cookie'+(Game.heavenlyCookies==1?'':'s')+'</span> at '+heavenlyMult+'% of their potential (+'+Beautify(Game.heavenlyCookies*10*heavenlyMult/100,1)+'% CpS)</span></div>'+
 				'<div class="listing"><small>(Each heavenly cookie grants you +1% CpS multiplier.)</small></div>'):'')+
 				(prestigeUpgrades!=''?(
 				'<div class="listing"><b>Prestige upgrades unlocked :</b> '+prestigeUpgradesOwned+'/'+prestigeUpgradesTotal+' ('+Math.floor((prestigeUpgradesOwned/prestigeUpgradesTotal)*100)+'%)</div>'+
@@ -4744,7 +4745,7 @@ Game.Launch=function()
 		
 		Game.NewUpgradeCookie=function(obj)
 		{
-			var upgrade=new Game.Upgrade(obj.name,'Cookie production multiplier <b>+'+Beautify(obj.power,1)+'%</b>.<q>'+obj.desc+'</q>',obj.price,obj.icon);
+			var upgrade=new Game.Upgrade(obj.name,'Cookie production multiplier <b>+'+Beautify((typeof(obj.power)=='function'?obj.power(obj):obj.power),1)+'%</b>.<q>'+obj.desc+'</q>',obj.price,obj.icon);
 			upgrade.power=obj.power;
 			upgrade.pool='cookie';
 			var toPush={cookies:obj.price/20,name:obj.name};
@@ -5098,7 +5099,7 @@ Game.Launch=function()
 		new Game.Upgrade('Naughty list','Grandmas are <b>twice</b> as productive.<q>This list contains every unholy deed perpetuated by grandmakind.<br>He won\'t be checking this one twice.<br>Once. Once is enough.</q>',2525,[15,9]);
 		new Game.Upgrade('Santa\'s bottomless bag','Random drops are <b>10% more common</b>.<q>This is one bottom you can\'t check out.</q>',2525,[19,9]);
 		new Game.Upgrade('Santa\'s helpers','Clicking is <b>10% more powerful</b>.<q>Some choose to help hamburger; some choose to help you.<br>To each their own, I guess.</q>',2525,[19,9]);
-		new Game.Upgrade('Santa\'s legacy','Cookie production multiplier <b>+%% per Santa\'s levels</b>.<q>In the north pole, you gotta get the elves first. Then when you get the elves, you start making the toys. Then when you get the toys... then you get the cookies.</q>',2525,[19,9]);
+		new Game.Upgrade('Santa\'s legacy','Cookie production multiplier <b>+10% per Santa\'s levels</b>.<q>In the north pole, you gotta get the elves first. Then when you get the elves, you start making the toys. Then when you get the toys... then you get the cookies.</q>',2525,[19,9]);
 		new Game.Upgrade('Santa\'s milk and cookies','Milk is <b>5% more powerful</b>.<q>Part of Santa\'s dreadfully unbalanced diet.</q>',2525,[19,9]);
 		
 		order=40000;
@@ -6669,6 +6670,8 @@ Game.Launch=function()
 				Game.Win(Game.Achievements[i].name);
 			}
 			Game.Earn(999999999999999999999999999999);
+			Game.heavenlyChips+=1000;
+			Game.heavenlyChipsEarned+=1000;
 			Game.upgradesToRebuild=1;
 			Game.recalculateGains=1;
 			Game.popups=1;
@@ -6884,7 +6887,7 @@ Game.Launch=function()
 				if (Game.handmadeCookies>=10000000000000) {Game.Win('Clickageddon');Game.Unlock('Eludium mouse');}
 				if (Game.handmadeCookies>=1000000000000000) {Game.Win('Clicknarok');Game.Unlock('Wishalloy mouse');}
 				
-				if (Game.cookiesEarned<Game.cookies) Game.Win('Cheated cookies taste awful');
+				if (Game.cookiesEarned<Game.cookies && 1==0) Game.Win('Cheated cookies taste awful');//temporary solution while building costs are out of synch when selling
 				if (Game.bakeryName.toLowerCase()=='orteil') Game.Win('God complex');
 				
 				if (Game.Has('Skull cookies') && Game.Has('Ghost cookies') && Game.Has('Bat cookies') && Game.Has('Slime cookies') && Game.Has('Pumpkin cookies') && Game.Has('Eyeball cookies') && Game.Has('Spider cookies')) Game.Win('Spooky cookies');
