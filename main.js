@@ -451,8 +451,8 @@ var Game={};
 
 Game.Launch=function()
 {
-	Game.version=2;
-	Game.beta=0;
+	Game.version=2.001;
+	Game.beta=1;
 	if (window.location.href.indexOf('/beta')>-1) Game.beta=1;
 	Game.mobile=0;
 	Game.touchEvents=0;
@@ -489,6 +489,11 @@ Game.Launch=function()
 	
 	'</div><div class="subsection">'+
 	'<div class="title">Version history</div>'+
+	
+	'</div><div class="subsection update small">'+
+	'<div class="title">23/04/2016 - golden cookies overhaul</div>'+
+	'<div class="listing">&bull; golden cookies and reindeer now follow a new system involving explicitly defined buffs</div>'+
+	'<div class="listing">&bull; a bunch of new golden cookie effects have been added</div>'+
 	
 	'</div><div class="subsection update">'+
 	'<div class="title">08/02/2016 - legacy</div>'+
@@ -840,6 +845,7 @@ Game.Launch=function()
 		Game.season=Game.baseSeason;
 		
 		Game.l=l('game');
+		Game.bounds=0;//rectangle defining screen limits (right,left,bottom,top) updated every logic frame
 
 		if (Game.mobile==1)
 		{
@@ -882,12 +888,6 @@ Game.Launch=function()
 		Game.cookiesd=0;//cookies display
 		Game.cookiesPs=1;//cookies per second (to recalculate with every new purchase)
 		Game.cookiesReset=0;//cookies lost to resetting (used to determine prestige and heavenly chips)
-		Game.frenzy=0;//as long as >0, cookie production is multiplied by frenzyPower
-		Game.frenzyMax=0;//how high was our initial burst
-		Game.frenzyPower=1;
-		Game.clickFrenzy=0;//as long as >0, mouse clicks get 777x more cookies
-		Game.clickFrenzyMax=0;//how high was our initial burst
-		Game.clickFrenzyPower=1;
 		Game.cookieClicks=0;//+1 for each click on the cookie
 		Game.goldenClicks=0;//+1 for each golden cookie clicked (all time)
 		Game.goldenClicksLocal=0;//+1 for each golden cookie clicked (this game only)
@@ -947,19 +947,6 @@ Game.Launch=function()
 		Game.startDate=parseInt(Date.now());//when we started playing
 		Game.fullDate=parseInt(Date.now());//when we started playing (carries over with resets)
 		Game.lastDate=parseInt(Date.now());//when we last saved the game (used to compute "cookies made since we closed the game" etc)
-		
-		var timers=['frenzy','elderFrenzy','clot','clickFrenzy'];
-		var str='';
-		for (var i in timers)
-		{
-			str+='<div id="timer-'+timers[i]+'"></div>';
-		}
-		l('timers').innerHTML=str;
-		Game.timersEl=[];
-		for (var i in timers)
-		{
-			Game.timersEl[timers[i]]=l('timer-'+timers[i]);
-		}
 		
 		Game.prefs=[];
 		Game.DefaultPrefs=function()
@@ -1240,7 +1227,7 @@ Game.Launch=function()
 			{
 				var me=Game.Objects[i];
 				if (type==3) str+='\n	'+me.name+' : ';
-				if (me.vanilla) str+=me.amount+','+me.bought+','+Math.floor(me.totalCookies)+','+(me.specialUnlocked?1:0)+';';
+				if (me.vanilla) str+=me.amount+','+me.bought+','+parseFloat(Math.floor(me.totalCookies))+','+(me.specialUnlocked?1:0)+';';
 			}
 			str+='|';
 			if (type==3) str+='\n\nPacked upgrades bitfield (unlocked and bought)\n	';
@@ -1741,12 +1728,6 @@ Game.Launch=function()
 					Game.TickerAge=0;
 					
 					Game.elderWrathD=0;
-					Game.frenzy=0;
-					Game.frenzyPower=1;
-					Game.frenzyMax=0;
-					Game.clickFrenzy=0;
-					Game.clickFrenzyPower=1;
-					Game.clickFrenzyMax=0;
 					Game.recalculateGains=1;
 					Game.storeToRefresh=1;
 					Game.upgradesToRebuild=1;
@@ -1756,8 +1737,7 @@ Game.Launch=function()
 					Game.specialTab='';
 					Game.ToggleSpecialMenu(0);
 					
-					Game.goldenCookie.reset();
-					Game.seasonPopup.reset();
+					Game.killShimmers();
 					
 					if (Game.T>Game.fps*5 && Game.ReincarnateTimer==0)//fade out of black and pop the cookie
 					{
@@ -1808,12 +1788,6 @@ Game.Launch=function()
 				Game.milkType=0;
 				Game.chimeType=0;
 			}
-			Game.frenzy=0;
-			Game.frenzyPower=1;
-			Game.frenzyMax=0;
-			Game.clickFrenzy=0;
-			Game.clickFrenzyPower=1;
-			Game.clickFrenzyMax=0;
 			Game.pledges=0;
 			Game.pledgeT=0;
 			Game.elderWrath=0;
@@ -1887,8 +1861,7 @@ Game.Launch=function()
 			Game.recalculateGains=1;
 			Game.storeToRefresh=1;
 			Game.upgradesToRebuild=1;
-			Game.goldenCookie.reset();
-			Game.seasonPopup.reset();
+			Game.killShimmers();
 			
 			Game.buyBulk=1;Game.buyMode=1;Game.storeBulkButton(-1);
 			
@@ -1995,10 +1968,20 @@ Game.Launch=function()
 					rect={left:rect.left,top:rect.top,right:rect.right,bottom:rect.bottom};
 					if (rect.left==0 && rect.top==0)//if we get that bug where we get stuck in the top-left, move to the mouse
 					{rect.left=Game.mouseX-24;rect.right=Game.mouseX+24;rect.top=Game.mouseY-24;rect.bottom=Game.mouseY+24;}
-					X=rect.left+(rect.right-rect.left)/2-this.tt.clientWidth/2-8;
-					Y=rect.top-this.tt.clientHeight-48;
-					X=Math.max(0,Math.min(Game.windowW-this.tt.clientWidth-16,X));
-					if (Y<0) Y=rect.bottom-32;
+					if (this.origin=='left')
+					{
+						X=rect.left-this.tt.clientWidth-16;
+						Y=rect.top+(rect.bottom-rect.top)/2-this.tt.clientHeight/2-38;
+						Y=Math.max(0,Math.min(Game.windowH-this.tt.clientHeight-19,Y));
+						if (X<0) X=rect.right;
+					}
+					else
+					{
+						X=rect.left+(rect.right-rect.left)/2-this.tt.clientWidth/2-8;
+						Y=rect.top-this.tt.clientHeight-48;
+						X=Math.max(0,Math.min(Game.windowW-this.tt.clientWidth-16,X));
+						if (Y<0) Y=rect.bottom-32;
+					}
 				}
 				else if (this.origin=='bottom-right')
 				{
@@ -2428,8 +2411,7 @@ Game.Launch=function()
 				Game.addClass('ascendIntro');
 				//trigger the ascend animation
 				Game.AscendTimer=1;
-				Game.goldenCookie.reset();
-				Game.seasonPopup.reset();
+				Game.killShimmers();
 				l('toggleBox').style.display='none';
 				l('toggleBox').innerHTML='';
 				Game.choiceSelectorOn=-1;
@@ -2729,13 +2711,21 @@ Game.Launch=function()
 			if (Game.Has('Santa\'s helpers')) mult*=1.1;
 			if (Game.Has('Cookie egg')) mult*=1.1;
 			if (Game.Has('Halo gloves')) mult*=1.1;
-			if (Game.clickFrenzy>0) mult*=Game.clickFrenzyPower;
+			
+			var buffs=['Click frenzy','Dragonflight'];
+			for (var i in buffs)
+			{
+				if (Game.hasBuff(buffs[i]) && Game.buffs[buffs[i]].power) mult*=Game.buffs[buffs[i]].power;
+			}
 			
 			if (Game.hasAura('Dragon Cursor')) mult*=1.05;
 			
 			for (var i in Game.customMouseCpsMult) {mult*=Game.customMouseCpsMult[i]();}
 			
-			return mult*Game.ComputeCps(1,Game.Has('Reinforced index finger')+Game.Has('Carpal tunnel prevention cream')+Game.Has('Ambidextrous'),add);
+			var out=mult*Game.ComputeCps(1,Game.Has('Reinforced index finger')+Game.Has('Carpal tunnel prevention cream')+Game.Has('Ambidextrous'),add);
+			
+			if (Game.hasBuff('Cursed finger')) out=Game.buffs['Cursed finger'].power;
+			return out;
 		}
 		Game.computedMouseCps=1;
 		Game.globalCpsMult=1;
@@ -2973,7 +2963,15 @@ Game.Launch=function()
 				if (rawCookiesPs>=Game.CpsAchievements[i].threshold) Game.Win(Game.CpsAchievements[i].name);
 			}
 			
-			if (Game.frenzy>0) mult*=Game.frenzyPower;
+			var buffs=['Frenzy','Elder frenzy','Clot','Dragon Harvest'];
+			for (var i in Game.goldenCookieBuildingBuffs)
+			{
+				buffs.push(Game.goldenCookieBuildingBuffs[i][0],Game.goldenCookieBuildingBuffs[i][1]);
+			}
+			for (var i in buffs)
+			{
+				if (Game.hasBuff(buffs[i]) && Game.buffs[buffs[i]].power) mult*=Game.buffs[buffs[i]].power;
+			}
 			
 			name=Game.bakeryName.toLowerCase();
 			if (name=='orteil') mult*=0.99;
@@ -3005,478 +3003,593 @@ Game.Launch=function()
 			Game.globalCpsMult=mult;
 			Game.cookiesPs*=Game.globalCpsMult;
 			
+			if (Game.hasBuff('Cursed finger')) Game.cookiesPs=0;
+			
 			Game.computedMouseCps=Game.mouseCps();
 			
 			Game.recalculateGains=0;
 		}
+		
 		/*=====================================================================================
-		GOLDEN COOKIE
+		SHIMMERS (GOLDEN COOKIES & SUCH), BUFFS
 		=======================================================================================*/
-		Game.goldenCookie={x:0,y:0,life:0,time:0,minTime:0,maxTime:0,dur:13,toDie:1,wrath:0,chain:0,last:'',force:''};
-		Game.goldenCookie.l=l('goldenCookie');
-		Game.goldenCookie.reset=function()
+		Game.shimmersL=l('shimmers');
+		Game.shimmers=[];//all shimmers currently on the screen
+		Game.shimmersN=Math.floor(Math.random()*10000);
+		Game.shimmer=function(type)
 		{
-			this.life=1;//the cookie's current progression through its lifespan
-			this.time=0;//the amount of time since the cookie has last been clicked
-			this.minTime=this.getMinTime();//the minimum amount of time we must wait for the cookie to spawn
-			this.maxTime=this.getMaxTime();//the maximum amount of time we must wait for the cookie to spawn
-			this.dur=13;//duration; the cookie's lifespan before it despawns
-			this.toDie=1;//should the cookie despawn? (I think that's what it does?)
-			this.last='';//what was the last cookie effect?
-			this.chain=0;//how far in the chain are we?
-			this.total=0;//how much have we made this whole chain?
-			this.force='';//the next golden cookie will have this effect
-			this.l.style.display='none';
-		}
-		Game.goldenCookie.getEffectDurMod=function()
-		{
-			var dur=1;
-			if (Game.Has('Get lucky')) dur*=2;
-			if (Game.Has('Lasting fortune')) dur*=1.1;
-			if (Game.hasAura('Epoch Manipulator')) dur*=1.05;
-			return dur;
-		}
-		Game.goldenCookie.getTimeMod=function(m)
-		{
-			if (Game.Has('Lucky day')) m/=2;
-			if (Game.Has('Serendipity')) m/=2;
-			if (Game.Has('Golden goose egg')) m*=0.95;
-			if (Game.Has('Heavenly luck')) m*=0.95;
-			if (Game.hasAura('Arcane Aura')) m*=0.95;
-			if (Game.season=='easter' && Game.Has('Starspawn')) m*=0.98;
-			else if (Game.season=='halloween' && Game.Has('Starterror')) m*=0.98;
-			else if (Game.season=='valentines' && Game.Has('Starlove')) m*=0.98;
-			else if (Game.season=='fools' && Game.Has('Startrade')) m*=0.95;
-			if (this.chain>0) m=0.05;
-			if (Game.Has('Gold hoard')) m=0.01;
-			return Math.ceil(Game.fps*60*m);
-		}
-		Game.goldenCookie.getMinTime=function()
-		{
-			var m=5;
-			return Game.goldenCookie.getTimeMod(m);
-		}
-		Game.goldenCookie.getMaxTime=function()
-		{
-			var m=15;
-			return Game.goldenCookie.getTimeMod(m);
-		}
-		Game.goldenCookie.spawn=function()
-		{
-			if (this.time<this.minTime || this.life>0) Game.Win('Cheated cookies taste awful');
+			this.type=type;
 			
-			if (Game.chimeType==1 && Game.ascensionMode!=1) PlaySound('snd/chime.mp3');
+			this.l=document.createElement('div');
+			this.l.className='shimmer';
+			if (!Game.touchEvents) {AddEvent(this.l,'click',function(what){return function(event){what.pop(event);};}(this));}
+			else {AddEvent(this.l,'touchend',function(what){return function(event){what.pop(event);};}(this));}//touch events
 			
-			var me=this.l;
-			me.style.backgroundPosition='0px 0px';
-			if ((Game.elderWrath==1 && Math.random()<1/3) || (Game.elderWrath==2 && Math.random()<2/3) || (Game.elderWrath==3))
-			{
-				this.wrath=1;
-				if (Game.season=='halloween') me.style.background='url(img/spookyCookie.png)';
-				else me.style.background='url(img/wrathCookie.png)';
-			}
-			else
-			{
-				this.wrath=0;
-				me.style.background='url(img/goldCookie.png)';
-			}
-			//fancy visual stuff
-			var r=Math.floor(Math.random()*360);
-			if (Game.season=='halloween' && this.wrath) r=Math.floor(Math.random()*36-18);
-			if (Game.season=='valentines')
-			{
-				me.style.background='url(img/hearts.png)';
-				me.style.backgroundPosition=-(Math.floor(Math.random()*8)*96)+'px 0px';
-				r=Math.floor(Math.random()*36-18);
-				if (this.wrath) r+=180;
-			}
-			else if (Game.season=='fools')
-			{
-				me.style.background='url(img/contract.png)';
-				r=Math.floor(Math.random()*8-4);
-				if (this.wrath) me.style.background='url(img/wrathContract.png)';
-			}
-			else if (Game.season=='easter')
-			{
-				me.style.background='url(img/bunnies.png)';
-				var picX=Math.floor(Math.random()*4);
-				var picY=0;
-				if (this.wrath) picY=1;
-				me.style.backgroundPosition=(-picX*96)+'px '+(-picY*96)+'px';
-				r=Math.floor(Math.random()*4-2);
-			}
-			me.style.transform='rotate('+r+'deg)';
-			me.style.mozTransform='rotate('+r+'deg)';
-			me.style.webkitTransform='rotate('+r+'deg)';
-			me.style.msTransform='rotate('+r+'deg)';
-			me.style.oTransform='rotate('+r+'deg)';
-			var screen=Game.l.getBoundingClientRect();
-			this.x=Math.floor(Math.random()*Math.max(0,(screen.right-300)-screen.left-128)+screen.left+64)-64;
-			this.y=Math.floor(Math.random()*Math.max(0,screen.bottom-screen.top-128)+screen.top+64)-64;
-			me.style.left=this.x+'px';
-			me.style.top=this.y+'px';
-			me.style.display='block';
-			//how long will it stay on-screen?
-			var dur=13;
-			if (Game.Has('Lucky day')) dur*=2;
-			if (Game.Has('Serendipity')) dur*=2;
-			if (Game.Has('Decisive fate')) dur*=1.05;
-			if (this.chain>0) dur=Math.max(2,10/this.chain);//this is hilarious
-			this.dur=dur;
-			this.life=Math.ceil(Game.fps*this.dur);
-			this.time=0;
-			this.toDie=0;
+			this.x=0;
+			this.y=0;
+			this.id=Game.shimmersN;
+			
+			this.init();
+			
+			Game.shimmersL.appendChild(this.l);
+			Game.shimmers.push(this);
+			Game.shimmersN++;
 		}
-		Game.goldenCookie.update=function()
+		Game.shimmer.prototype.init=function()//executed when the shimmer is created
 		{
-			if (!Game.Has('Golden switch [off]'))
-			{
-				if (this.toDie==0 && this.life<=0 && Math.random()<Math.pow(Math.max(0,(this.time-this.minTime)/(this.maxTime-this.minTime)),5)) this.spawn();
-				if (this.life>0)
-				{
-					this.life--;
-					
-					this.l.style.opacity=1-Math.pow((this.life/(Game.fps*this.dur))*2-1,4);
-					if (this.life==0 || this.toDie==1)
-					{
-						if (this.life==0 && this.chain>0 && this.total>0)
-						{
-							if (Game.prefs.popups) Game.Popup('Cookie chain broken. You made '+Beautify(this.total)+' cookies.');
-							else Game.Notify('Cookie chain broken','You made '+Beautify(this.total)+' cookies.',[21,6],6);
-							this.chain=0;this.total=0;
-						}
-						this.l.style.display='none';
-						if (this.toDie==0) Game.missedGoldenClicks++;
-						this.toDie=0;
-						this.life=0;
-					}
-				}
-				else this.time++;
-			}
-			else this.l.style.display='none';
+			Game.shimmerTypes[this.type].initFunc(this);
 		}
-		Game.goldenCookie.choices=[
-			"Frenzy","frenzy",
-			"Lucky","multiply cookies",
-			"Ruin","ruin cookies",
-			"Elder frenzy","blood frenzy",
-			"Clot","clot",
-			"Click frenzy","click frenzy",
-			"Cookie chain","chain cookie",
-			"Dragon Harvest","dragon harvest",
-			"Dragonflight","dragonflight",
-			"Blab","blab"
-		];
-		Game.goldenCookie.choose=function()
+		Game.shimmer.prototype.update=function()//executed every frame
 		{
-			var list=[];
-			if (this.wrath>0) list.push('clot','multiply cookies','ruin cookies');
-			else list.push('frenzy','multiply cookies');
-			if (this.wrath>0 && Math.random()<0.3) list.push('blood frenzy','chain cookie');
-			else if (Math.random()<0.03 && Game.cookiesEarned>=100000) list.push('chain cookie');
-			if (Math.random()<0.1) list.push('click frenzy');
-			
-			if ((this.wrath==0 && Math.random()<0.15) || Math.random()<0.05)
-			{
-				if (Game.hasAura('Reaper of Fields')) list.push('dragon harvest');
-				if (Game.hasAura('Dragonflight')) list.push('dragonflight');
-			}
-			
-			if (this.last!='' && Math.random()<0.8 && list.indexOf(this.last)!=-1) list.splice(list.indexOf(this.last),1);//80% chance to force a different one
-			if (Math.random()<0.0001) list.push('blab');
-			var choice=choose(list);
-			return choice;
+			Game.shimmerTypes[this.type].updateFunc(this);
 		}
-		Game.goldenCookie.click=function(event,force)
+		Game.shimmer.prototype.pop=function(event)//executed when the shimmer is popped by the player
 		{
 			if (event) event.preventDefault();
 			Game.Click=0;
-			var me=Game.goldenCookie;
-			
-			if (me.life>0 || force)
+			Game.shimmerTypes[this.type].popFunc(this);
+		}
+		Game.shimmer.prototype.die=function()//executed after the shimmer disappears (from old age or popping)
+		{
+			if (Game.shimmerTypes[this.type].spawnsOnTimer && this.spawnLead)
 			{
-				Game.SparkleAt(me.x+48,me.y+48);
-				PlaySound('snd/shimmerClick.mp3');
+				//if this was the spawn lead for this shimmer type, set the shimmer type's "spawned" to 0 and restart its spawn timer
+				var type=Game.shimmerTypes[this.type];
+				type.time=0;
+				type.spawned=0;
+				type.minTime=type.getMinTime();
+				type.maxTime=type.getMaxTime();
+			}
+			Game.shimmersL.removeChild(this.l);
+			if (Game.shimmers.indexOf(this)!=-1) Game.shimmers.splice(Game.shimmers.indexOf(this),1);
+		}
+		
+		
+		Game.updateShimmers=function()//run shimmer functions, kill overtimed shimmers and spawn new ones
+		{
+			for (var i in Game.shimmers)
+			{
+				Game.shimmers[i].update();
+			}
 			
-				if (force) me.life=1;
-				me.toDie=1;
-				Game.goldenClicks++;
-				Game.goldenClicksLocal++;
-				
-				if (Game.goldenClicks>=1) Game.Win('Golden cookie');
-				if (Game.goldenClicks>=7) Game.Win('Lucky cookie');
-				if (Game.goldenClicks>=27) Game.Win('A stroke of luck');
-				if (Game.goldenClicks>=77) Game.Win('Fortune');
-				if (Game.goldenClicks>=777) Game.Win('Leprechaun');
-				if (Game.goldenClicks>=7777) Game.Win('Black cat\'s paw');
-				
-				//change to goldenClicksLocal later
-				if (Game.goldenClicks>=7) Game.Unlock('Lucky day');
-				if (Game.goldenClicks>=27) Game.Unlock('Serendipity');
-				if (Game.goldenClicks>=77) Game.Unlock('Get lucky');
-				
-				l('goldenCookie').style.display='none';
-				
-				var choice=me.choose();
-				if (force) choice=force;
-				
-				if (me.chain>0) choice='chain cookie';
-				
-				if (me.force!='') {me.chain=0;choice=me.force;me.force='';}
-				
-				me.last=choice;
-				
-				var popup=0;
-				
-				var mult=1;
-				if (this.wrath>0 && Game.hasAura('Unholy Dominion')) mult*=1.1;
-				else if (this.wrath==0 && Game.hasAura('Ancestral Metamorphosis')) mult*=1.1;
-				
-				if (choice!='chain cookie') me.chain=0;
-				if (choice=='frenzy')
+			//cookie storm!
+			if (Game.hasBuff('Cookie storm') && Math.random()<0.5)
+			{
+				var newShimmer=new Game.shimmer('golden');
+				newShimmer.dur=Math.ceil(Math.random()*4+1);
+				newShimmer.life=Math.ceil(Game.fps*newShimmer.dur);
+				newShimmer.force='cookie storm drop';
+				newShimmer.sizeMult=Math.random()*0.75+0.25;
+			}
+			
+			//spawn shimmers
+			for (var i in Game.shimmerTypes)
+			{
+				var me=Game.shimmerTypes[i];
+				if (me.spawnsOnTimer && me.spawnConditions())//only run on shimmer types that work on a timer
 				{
-					var time=Math.ceil(77*Game.goldenCookie.getEffectDurMod());
-					Game.frenzy=Game.fps*time;
-					Game.frenzyPower=7;
-					Game.frenzyMax=Game.frenzy;
-					Game.recalculateGains=1;
-					popup=['Frenzy : cookie production x7 for '+time+' seconds!','Frenzy','Cookie production <b>x7</b> for <b>'+time+'</b> seconds!'];
-				}
-				if (choice=='dragon harvest')
-				{
-					var time=Math.ceil(60*Game.goldenCookie.getEffectDurMod());
-					Game.frenzy=Game.fps*time;
-					Game.frenzyPower=15;
-					Game.frenzyMax=Game.frenzy;
-					Game.recalculateGains=1;
-					popup=['Dragon harvest : cookie production x15 for '+time+' seconds!','Dragon harvest','Cookie production <b>x15</b> for <b>'+time+'</b> seconds!'];
-				}
-				else if (choice=='multiply cookies')
-				{
-					var moni=mult*Math.min(Game.cookies*0.15,Game.cookiesPs*60*15)+13;//add 15% to cookies owned (+13), or 15 minutes of cookie production - whichever is lowest
-					Game.Earn(moni);
-					popup=['Lucky! +'+Beautify(moni)+' cookies!','Lucky!','+<b>'+Beautify(moni)+'</b> cookies!'];
-				}
-				else if (choice=='ruin cookies')
-				{
-					var moni=Math.min(Game.cookies*0.05,Game.cookiesPs*60*10)+13;//lose 5% of cookies owned (-13), or 10 minutes of cookie production - whichever is lowest
-					moni=Math.min(Game.cookies,moni);
-					Game.Spend(moni);
-					popup=['Ruin! Lost '+Beautify(moni)+' cookies!','Ruin!','Lost <b>'+Beautify(moni)+'</b> cookies!'];
-				}
-				else if (choice=='blood frenzy')
-				{
-					var time=Math.ceil(6*Game.goldenCookie.getEffectDurMod());
-					Game.frenzy=Game.fps*time;//*2;//we shouldn't need *2 but I keep getting reports of it lasting only 3 seconds
-					Game.frenzyPower=666;
-					Game.frenzyMax=Game.frenzy;
-					Game.recalculateGains=1;
-					popup=['Elder frenzy : cookie production x666 for '+time+' seconds!','Elder frenzy','Cookie production <b>x666</b> for <b>'+time+'</b> seconds!'];
-				}
-				else if (choice=='clot')
-				{
-					var time=Math.ceil(66*Game.goldenCookie.getEffectDurMod());
-					Game.frenzy=Game.fps*time;
-					Game.frenzyPower=0.5;
-					Game.frenzyMax=Game.frenzy;
-					Game.recalculateGains=1;
-					popup=['Clot : cookie production halved for '+time+' seconds!','Clot','Cookie production <b>halved</b> for <b>'+time+'</b> seconds!'];
-				}
-				else if (choice=='click frenzy')
-				{
-					var time=Math.ceil(13*Game.goldenCookie.getEffectDurMod());
-					Game.clickFrenzy=Game.fps*time;
-					Game.clickFrenzyPower=777;
-					Game.clickFrenzyMax=Game.clickFrenzy;
-					Game.recalculateGains=1;
-					popup=['Click frenzy! Clicking power x777 for '+time+' seconds!','Click frenzy','Clicking power <b>x777</b> for <b>'+time+'</b> seconds!'];
-				}
-				else if (choice=='dragonflight')
-				{
-					var time=Math.ceil(10*Game.goldenCookie.getEffectDurMod());
-					Game.clickFrenzy=Game.fps*time;
-					Game.clickFrenzyPower=1111;
-					Game.clickFrenzyMax=Game.clickFrenzy;
-					Game.recalculateGains=1;
-					popup=['Dragonflight! Clicking power x1111 for '+time+' seconds!','Dragonflight','Clicking power <b>x1111</b> for <b>'+time+'</b> seconds!'];
-				}
-				else if (choice=='chain cookie')
-				{
-					//fix by Icehawk78
-					if (me.chain==0) me.total=0;
-					me.chain++;
-					var digit=me.wrath?6:7;
-					if (me.chain==1) me.chain+=Math.max(0,Math.ceil(Math.log(Game.cookies)/Math.LN10)-10);
-					
-					var maxPayout=Math.min(Game.cookiesPs*60*60*6,Game.cookies*0.25)*mult;
-					var moni=Math.max(digit,Math.min(Math.floor(1/9*Math.pow(10,me.chain)*digit*mult),maxPayout));
-					var nextMoni=Math.max(digit,Math.min(Math.floor(1/9*Math.pow(10,me.chain+1)*digit*mult),maxPayout));
-					me.total+=moni;
-
-					var moniStr=Beautify(moni);
-
-					//break the chain if we're above 5 digits AND it's more than 25% of our bank, it grants more than 6 hours of our CpS, or just a 1% chance each digit (update : removed digit limit)
-					if (Math.random()<0.01 || nextMoni>=maxPayout)
+					if (!me.spawned)//no shimmer spawned for this type? check the timer and try to spawn one
 					{
-						me.chain=0;
-						popup=['Cookie chain : +'+moniStr+' cookies!<br>Cookie chain over. You made '+Beautify(me.total)+' cookies.','Cookie chain over','+<b>'+moniStr+'</b> cookies!<br>(Total : '+Beautify(me.total)+')'];
+						me.time++;
+						if (Math.random()<Math.pow(Math.max(0,(me.time-me.minTime)/(me.maxTime-me.minTime)),5))
+						{
+							var newShimmer=new Game.shimmer(i);
+							newShimmer.spawnLead=1;
+							me.spawned=1;
+						}
+					}
+				}
+			}
+		}
+		Game.killShimmers=function()//stop and delete all shimmers (used on resetting etc)
+		{
+			for (var i in Game.shimmers)
+			{
+				Game.shimmers[i].die();
+			}
+			for (var i in Game.shimmerTypes)
+			{
+				var me=Game.shimmerTypes[i];
+				if (me.reset) me.reset();
+				if (me.spawnsOnTimer)
+				{
+					me.time=0;
+					me.spawned=0;
+					me.minTime=me.getMinTime();
+					me.maxTime=me.getMaxTime();
+				}
+			}
+		}
+		
+		Game.shimmerTypes={
+			//in these, "me" refers to the shimmer itself, and "this" to the shimmer's type object
+			'golden':{
+				reset:function()
+				{
+					this.chain=0;
+					this.totalFromChain=0;
+					this.last='';
+				},
+				initFunc:function(me)
+				{
+					if (!this.spawned && Game.chimeType==1 && Game.ascensionMode!=1) PlaySound('snd/chime.mp3');
+					
+					//set image
+					var bgPic='img/goldCookie.png';
+					var picX=0;var picY=0;
+					
+					if ((Game.elderWrath==1 && Math.random()<1/3) || (Game.elderWrath==2 && Math.random()<2/3) || (Game.elderWrath==3))
+					{
+						me.wrath=1;
+						if (Game.season=='halloween') bgPic='img/spookyCookie.png';
+						else bgPic='img/wrathCookie.png';
 					}
 					else
 					{
-						popup=['Cookie chain : +'+moniStr+' cookies!','Cookie chain','+<b>'+moniStr+'</b> cookies!'];
+						me.wrath=0;
 					}
-					Game.Earn(moni);
-				}
-				else if (choice=='blab')//sorry (it's really rare)
-				{
-					var str=choose([
-					'Cookie crumbliness x3 for 60 seconds!',
-					'Chocolatiness x7 for 77 seconds!',
-					'Dough elasticity halved for 66 seconds!',
-					'Golden cookie shininess doubled for 3 seconds!',
-					'World economy halved for 30 seconds!',
-					'Grandma kisses 23% stingier for 45 seconds!',
-					'Thanks for clicking!',
-					'Fooled you! This one was just a test.',
-					'Golden cookies clicked +1!',
-					'Your click has been registered. Thank you for your cooperation.',
-					'Thanks! That hit the spot!',
-					'Thank you. A team has been dispatched.',
-					'They know.',
-					'Oops. This was just a chocolate cookie with shiny aluminium foil.'
-					]);
-					popup=[str,'???',str];
-				}
-				
-				if (popup!=0)
-				{
-					if (Game.prefs.popups) Game.Popup(popup[0]);
-					else Game.Notify(popup[1],popup[2],[10,14],12);
-				}
-				
-				Game.DropEgg(0.9);
-				
-				me.minTime=me.getMinTime();
-				me.maxTime=me.getMaxTime();
-			}
-			Game.Click=0;
-		}
-		
-		if (!Game.touchEvents)
-		{
-			AddEvent(l('goldenCookie'),'click',Game.goldenCookie.click);
-		}
-		else
-		{
-			//touch events
-			AddEvent(l('goldenCookie'),'touchend',Game.goldenCookie.click);
-		}
-		
-		/*=====================================================================================
-		SEASON POPUP
-		=======================================================================================*/
-		Game.seasonPopup={x:0,y:0,life:0,time:0,minTime:0,maxTime:0,dur:4,toDie:1,last:'',type:'',bounds:{}};
-		Game.seasonPopup.reset=function()
-		{
-			this.life=1;//the popup's current progression through its lifespan
-			this.time=0;//the amount of time since the popup has last been clicked
-			this.minTime=this.getMinTime();//the minimum amount of time we must wait for the popup to spawn
-			this.maxTime=this.getMaxTime();//the maximum amount of time we must wait for the popup to spawn
-			this.dur=4;//duration; the popup's lifespan before it despawns
-			this.toDie=1;//should the popup despawn? (I think that's what it does?)
-			this.last='';//what was the last popup effect?
-			this.type='';//is it a reindeer? what the hell is it? no seriously
-			this.bounds=Game.l.getBoundingClientRect();
-			l('seasonPopup').style.display='none';
-		}
-		Game.seasonPopup.getMinTime=function()
-		{
-			var m=3;
-			//time bonuses go here
-			if (Game.Has('Reindeer baking grounds')) m/=2;
-			if (Game.Has('Starsnow')) m*=0.95;
-			if (Game.Has('Reindeer season')) m=0.01;
-			return Math.ceil(Game.fps*60*m);
-		}
-		Game.seasonPopup.getMaxTime=function()
-		{
-			var m=6;
-			//time bonuses go here
-			if (Game.Has('Reindeer baking grounds')) m/=2;
-			if (Game.Has('Starsnow')) m*=0.95;
-			if (Game.Has('Reindeer season')) m=0.01;
-			return Math.ceil(Game.fps*60*m);
-		}
-		Game.seasonPopup.spawn=function()
-		{
-			if (this.time<this.minTime || this.life>0) Game.Win('Cheated cookies taste awful');
-			
-			if (Game.chimeType>0 && Game.ascensionMode!=1) PlaySound('snd/jingle.mp3');
-			
-			var me=l('seasonPopup');
-			
-			if (this.type=='reindeer')
-			{
-				me.style.backgroundImage='url(img/frostedReindeer.png)';
-			}
-			
-			//fancy visual stuff
-			this.bounds=Game.l.getBoundingClientRect();
-			//this.x=Math.floor(Math.random()*Math.max(0,(screen.right-300)-screen.left-128)+screen.left+64)-64;
-			//this.y=Math.floor(Math.random()*Math.max(0,screen.bottom-screen.top-128)+screen.top+64)-64;
-			this.x=-128;
-			this.y=Math.floor(Math.random()*Math.max(0,this.bounds.bottom-this.bounds.top-256)+this.bounds.top+128)-128;
-			me.style.left=this.x+'px';
-			me.style.top=this.y+'px';
-			me.style.display='block';
-			//how long will it stay on-screen?
-			var dur=4;
-			if (Game.Has('Weighted sleighs')) dur*=2;
-			this.dur=dur;
-			this.life=Math.ceil(Game.fps*this.dur);
-			this.time=0;
-			this.toDie=0;
-		}
-		Game.seasonPopup.update=function()
-		{
-			if (this.toDie==0 && this.life<=0 && Math.random()<Math.pow(Math.max(0,(this.time-this.minTime)/(this.maxTime-this.minTime)),5)) 
-			{
-				if (Game.season=='christmas')
-				{
-					this.type='reindeer';
-					this.spawn();
-				}
-			}
-			if (this.life>0)
-			{
-				this.life--;
-				var me=l('seasonPopup');
-				me.style.opacity=1-Math.pow((this.life/(Game.fps*this.dur))*2-1,12);
-				this.x=Math.floor((1-this.life/(Game.fps*this.dur))*(this.bounds.right-this.bounds.left))-128;
-				me.style.left=this.x+'px';
-				me.style.top=this.y-Math.floor(Math.abs(Math.sin(this.life*0.05))*128)+'px';
-				if (this.life==0 || Game.seasonPopup.toDie==1)
-				{
-					if (this.life==0) this.chain=0;
-					l('seasonPopup').style.display='none';
-					this.toDie=0;
-					this.life=0;
-				}
-			}
-			else this.time++;
-		}
-		Game.seasonPopup.click=function()
-		{
-			var me=Game.seasonPopup;
-			if (me.life>0)
-			{
-				me.toDie=1;
-				if (me.type=='reindeer')
-				{
-					Game.SparkleAt(Game.mouseX,Game.mouseY);
-					PlaySound('snd/jingleClick.mp3');
 					
-					Game.reindeerClicked++;
+					if (Game.season=='valentines')
+					{
+						bgPic='img/hearts.png';
+						picX=Math.floor(Math.random()*8);
+					}
+					else if (Game.season=='fools')
+					{
+						bgPic='img/contract.png';
+						if (me.wrath) bgPic='img/wrathContract.png';
+					}
+					else if (Game.season=='easter')
+					{
+						bgPic='img/bunnies.png';
+						picX=Math.floor(Math.random()*4);
+						picY=0;
+						if (me.wrath) picY=1;
+					}
+					
+					me.x=Math.floor(Math.random()*Math.max(0,(Game.bounds.right-300)-Game.bounds.left-128)+Game.bounds.left+64)-64;
+					me.y=Math.floor(Math.random()*Math.max(0,Game.bounds.bottom-Game.bounds.top-128)+Game.bounds.top+64)-64;
+					me.l.style.left=me.x+'px';
+					me.l.style.top=me.y+'px';
+					me.l.style.width='96px';
+					me.l.style.height='96px';
+					me.l.style.backgroundImage='url('+bgPic+')';
+					me.l.style.backgroundPosition=(-picX*96)+'px '+(-picY*96)+'px';
+					me.l.style.opacity='0';
+					me.l.style.display='block';
+					
+					me.life=1;//the cookie's current progression through its lifespan (in frames)
+					me.dur=13;//duration; the cookie's lifespan in seconds before it despawns
+					
+					var dur=13;
+					if (Game.Has('Lucky day')) dur*=2;
+					if (Game.Has('Serendipity')) dur*=2;
+					if (Game.Has('Decisive fate')) dur*=1.05;
+					if (this.chain>0) dur=Math.max(2,10/this.chain);//this is hilarious
+					me.dur=dur;
+					me.life=Math.ceil(Game.fps*me.dur);
+					me.force='';
+					me.sizeMult=1;
+				},
+				updateFunc:function(me)
+				{
+					var curve=1-Math.pow((me.life/(Game.fps*me.dur))*2-1,4);
+					me.l.style.opacity=curve;
+					//this line makes each golden cookie pulse in a unique way
+					me.l.style.transform='rotate('+(Math.sin(me.id*0.69)*24+Math.sin(Game.T*(0.35+Math.sin(me.id*0.97)*0.15)+me.id/*+Math.sin(Game.T*0.07)*2+2*/)*(3+Math.sin(me.id*0.36)*2))+'deg) scale('+(me.sizeMult*(1+Math.sin(me.id*0.53)*0.2)*curve*(1+(0.06+Math.sin(me.id*0.41)*0.05)*(Math.sin(Game.T*(0.25+Math.sin(me.id*0.73)*0.15)+me.id))))+')';
+					me.life--;
+					if (me.life<=0) {this.missFunc(me);me.die();}
+				},
+				popFunc:function(me)
+				{
+					//get achievs and stats
+					if (me.spawnLead)
+					{
+						Game.goldenClicks++;
+						Game.goldenClicksLocal++;
+						
+						if (Game.goldenClicks>=1) Game.Win('Golden cookie');
+						if (Game.goldenClicks>=7) Game.Win('Lucky cookie');
+						if (Game.goldenClicks>=27) Game.Win('A stroke of luck');
+						if (Game.goldenClicks>=77) Game.Win('Fortune');
+						if (Game.goldenClicks>=777) Game.Win('Leprechaun');
+						if (Game.goldenClicks>=7777) Game.Win('Black cat\'s paw');
+						
+						if (Game.goldenClicks>=7) Game.Unlock('Lucky day');
+						if (Game.goldenClicks>=27) Game.Unlock('Serendipity');
+						if (Game.goldenClicks>=77) Game.Unlock('Get lucky');
+						
+						if ((me.life/Game.fps)>(me.dur-1)) Game.Win('Early bird');
+						if (me.life<Game.fps) Game.Win('Fading luck');
+					}
+					
+					//select an effect
+					var list=[];
+					if (me.wrath>0) list.push('clot','multiply cookies','ruin cookies');
+					else list.push('frenzy','multiply cookies');
+					if (me.wrath>0 && Math.random()<0.3) list.push('blood frenzy','chain cookie','cookie storm');
+					else if (Math.random()<0.03 && Game.cookiesEarned>=100000) list.push('chain cookie','cookie storm');
+					if (Math.random()<0.05 && Game.season=='fools') list.push('everything must go');
+					if (Math.random()<0.1) list.push('click frenzy');
+					if (me.wrath && Math.random()<0.1) list.push('cursed finger');
+					
+					if (Game.BuildingsOwned>=10 && Math.random()<0.25) list.push('building special');
+					
+					if ((me.wrath==0 && Math.random()<0.15) || Math.random()<0.05)
+					{
+						if (Game.hasAura('Reaper of Fields')) list.push('dragon harvest');
+						if (Game.hasAura('Dragonflight')) list.push('dragonflight');
+					}
+					
+					if (this.last!='' && Math.random()<0.8 && list.indexOf(this.last)!=-1) list.splice(list.indexOf(this.last),1);//80% chance to force a different one
+					if (Math.random()<0.0001) list.push('blab');
+					var choice=choose(list);
+					
+					if (this.chain>0) choice='chain cookie';
+					if (me.force!='') {this.chain=0;choice=me.force;me.force='';}
+					if (choice!='chain cookie') me.chain=0;
+					
+					this.last=choice;
+					
+					//create buff for effect
+					var effectDurMod=1;
+					if (Game.Has('Get lucky')) effectDurMod*=2;
+					if (Game.Has('Lasting fortune')) effectDurMod*=1.1;
+					if (Game.hasAura('Epoch Manipulator')) effectDurMod*=1.05;
+					
+					var mult=1;
+					if (me.wrath>0 && Game.hasAura('Unholy Dominion')) mult*=1.1;
+					else if (me.wrath==0 && Game.hasAura('Ancestral Metamorphosis')) mult*=1.1;
+					
+					var popup='';
+					var buff=0;
+					
+					if (choice=='building special')
+					{
+						var time=Math.ceil(30*effectDurMod);
+						var list=[];
+						for (var i in Game.Objects)
+						{
+							if (Game.Objects[i].amount>=10) list.push(Game.Objects[i].name);
+						}
+						if (list.length==0) {choice='frenzy';}//default to frenzy if no proper building
+						else
+						{
+							var obj=choose(list);
+							var pow=Game.Objects[obj].amount/10+1;
+							if (me.wrath && Math.random()<0.3)
+							{
+								buff=Game.setBuff({
+									name:Game.goldenCookieBuildingBuffs[obj][1],
+									desc:'Your '+Game.Objects[obj].amount+' '+Game.Objects[obj].plural+' are rusting your CpS!<br>Cookie production -'+(Math.ceil(pow*100-100))+'% for '+time+' seconds!',
+									icon:[Game.Objects[obj].iconColumn,15],
+									time:time*Game.fps,
+									add:true,
+									power:1/pow
+								});
+							}
+							else
+							{
+								buff=Game.setBuff({
+									name:Game.goldenCookieBuildingBuffs[obj][0],
+									desc:'Your '+Game.Objects[obj].amount+' '+Game.Objects[obj].plural+' are boosting your CpS!<br>Cookie production +'+(Math.ceil(pow*100-100))+'% for '+time+' seconds!',
+									icon:[Game.Objects[obj].iconColumn,14],
+									time:time*Game.fps,
+									add:true,
+									power:pow
+								});
+							}
+						}
+					}
+					
+					if (choice=='frenzy')
+					{
+						var time=Math.ceil(77*effectDurMod);
+						var pow=7;
+						buff=Game.setBuff({
+							name:'Frenzy',
+							desc:'Cookie production x'+pow+' for '+time+' seconds!',
+							icon:[10,14],
+							time:time*Game.fps,
+							add:true,
+							power:pow
+						});
+					}
+					else if (choice=='dragon harvest')
+					{
+						var time=Math.ceil(60*effectDurMod);
+						var pow=15;
+						buff=Game.setBuff({
+							name:'Dragon Harvest',
+							desc:'Cookie production x'+pow+' for '+time+' seconds!',
+							icon:[10,25],
+							time:time*Game.fps,
+							add:true,
+							power:pow
+						});
+					}
+					else if (choice=='everything must go')
+					{
+						var time=Math.ceil(5*effectDurMod);
+						var pow=5;
+						buff=Game.setBuff({
+							name:'Everything must go',
+							desc:'All buildings are 5% cheaper for '+time+' seconds!',
+							icon:[17,6],
+							time:time*Game.fps,
+							add:true,
+							power:pow
+						});
+					}
+					else if (choice=='multiply cookies')
+					{
+						var moni=mult*Math.min(Game.cookies*0.15,Game.cookiesPs*60*15)+13;//add 15% to cookies owned (+13), or 15 minutes of cookie production - whichever is lowest
+						Game.Earn(moni);
+						popup='Lucky!<div style="font-size:65%;">+'+Beautify(moni)+' cookies!</div>';
+					}
+					else if (choice=='ruin cookies')
+					{
+						var moni=Math.min(Game.cookies*0.05,Game.cookiesPs*60*10)+13;//lose 5% of cookies owned (-13), or 10 minutes of cookie production - whichever is lowest
+						moni=Math.min(Game.cookies,moni);
+						Game.Spend(moni);
+						popup='Ruin!<div style="font-size:65%;">Lost '+Beautify(moni)+' cookies!</div>';
+					}
+					else if (choice=='blood frenzy')
+					{
+						var time=Math.ceil(6*effectDurMod);
+						var pow=666;
+						buff=Game.setBuff({
+							name:'Elder frenzy',
+							desc:'Cookie production x'+pow+' for '+time+' seconds!',
+							icon:[29,6],
+							time:time*Game.fps,
+							add:true,
+							power:pow
+						});
+					}
+					else if (choice=='clot')
+					{
+						var time=Math.ceil(66*effectDurMod);
+						var pow=0.5;
+						buff=Game.setBuff({
+							name:'Clot',
+							desc:'Cookie production halved for '+time+' seconds!',
+							icon:[15,5],
+							time:time*Game.fps,
+							add:true,
+							power:pow
+						});
+					}
+					else if (choice=='cursed finger')
+					{
+						var time=Math.ceil(10*effectDurMod);
+						var pow=Game.cookiesPs*time;
+						buff=Game.setBuff({
+							name:'Cursed finger',
+							desc:'Cookie production halted for '+time+' seconds,<br>but each click is worth '+time+' seconds of CpS.',
+							icon:[12,17],
+							time:time*Game.fps,
+							add:true,
+							power:pow
+						});
+					}
+					else if (choice=='click frenzy')
+					{
+						var time=Math.ceil(13*effectDurMod);
+						var pow=777;
+						buff=Game.setBuff({
+							name:'Click frenzy',
+							desc:'Clicking power x'+pow+' for '+time+' seconds!',
+							icon:[0,14],
+							time:time*Game.fps,
+							add:true,
+							power:pow
+						});
+					}
+					else if (choice=='dragonflight')
+					{
+						var time=Math.ceil(10*effectDurMod);
+						var pow=1111;
+						buff=Game.setBuff({
+							name:'Dragonflight',
+							desc:'Clicking power x'+pow+' for '+time+' seconds!',
+							icon:[0,25],
+							time:time*Game.fps,
+							add:true,
+							power:pow
+						});
+					}
+					else if (choice=='chain cookie')
+					{
+						//fix by Icehawk78
+						if (this.chain==0) this.totalFromChain=0;
+						this.chain++;
+						var digit=me.wrath?6:7;
+						if (this.chain==1) me.chain+=Math.max(0,Math.ceil(Math.log(Game.cookies)/Math.LN10)-10);
+						
+						var maxPayout=Math.min(Game.cookiesPs*60*60*6,Game.cookies*0.25)*mult;
+						var moni=Math.max(digit,Math.min(Math.floor(1/9*Math.pow(10,this.chain)*digit*mult),maxPayout));
+						var nextMoni=Math.max(digit,Math.min(Math.floor(1/9*Math.pow(10,this.chain+1)*digit*mult),maxPayout));
+						this.totalFromChain+=moni;
+
+						var moniStr=Beautify(moni);
+
+						//break the chain if we're above 5 digits AND it's more than 25% of our bank, it grants more than 6 hours of our CpS, or just a 1% chance each digit (update : removed digit limit)
+						if (Math.random()<0.01 || nextMoni>=maxPayout)
+						{
+							this.chain=0;
+							popup='Cookie chain<div style="font-size:65%;">+'+moniStr+' cookies!<br>Cookie chain over. You made '+Beautify(this.totalFromChain)+' cookies.</div>';
+						}
+						else
+						{
+							popup='Cookie chain<div style="font-size:65%;">+'+moniStr+' cookies!</div>';//
+						}
+						Game.Earn(moni);
+					}
+					else if (choice=='cookie storm')
+					{
+						var time=Math.ceil(7*effectDurMod);
+						var pow=7;
+						buff=Game.setBuff({
+							name:'Cookie storm',
+							desc:'Cookies everywhere!',
+							icon:[22,6],
+							time:time*Game.fps,
+							add:true,
+							power:pow
+						});
+					}
+					else if (choice=='cookie storm drop')
+					{
+						var moni=Math.max(mult*(Game.cookiesPs*60*Math.floor(Math.random()*7+1)),Math.floor(Math.random()*7+1));//either 1-7 cookies or 1-7 minutes of cookie production, whichever is highest
+						Game.Earn(moni);
+						popup='<div style="font-size:75%;">+'+Beautify(moni)+' cookies!</div>';
+					}
+					else if (choice=='blab')//sorry (it's really rare)
+					{
+						var str=choose([
+						'Cookie crumbliness x3 for 60 seconds!',
+						'Chocolatiness x7 for 77 seconds!',
+						'Dough elasticity halved for 66 seconds!',
+						'Golden cookie shininess doubled for 3 seconds!',
+						'World economy halved for 30 seconds!',
+						'Grandma kisses 23% stingier for 45 seconds!',
+						'Thanks for clicking!',
+						'Fooled you! This one was just a test.',
+						'Golden cookies clicked +1!',
+						'Your click has been registered. Thank you for your cooperation.',
+						'Thanks! That hit the spot!',
+						'Thank you. A team has been dispatched.',
+						'They know.',
+						'Oops. This was just a chocolate cookie with shiny aluminium foil.'
+						]);
+						popup=str;
+					}
+					
+					if (popup=='' && buff && buff.name && buff.desc) popup=buff.name+'<div style="font-size:65%;">'+buff.desc+'</div>';
+					if (popup!='') Game.Popup(popup,me.x+me.l.offsetWidth/2,me.y);
+					
+					
+					Game.DropEgg(0.9);
+					
+					//sparkle and kill the shimmer
+					Game.SparkleAt(me.x+48,me.y+48);
+					if (choice=='cookie storm drop')
+					{
+						if (Game.prefs.cookiesound) PlaySound('snd/clickb'+Math.floor(Math.random()*7+1)+'.mp3',0.75);
+						else PlaySound('snd/click'+Math.floor(Math.random()*7+1)+'.mp3',0.75);
+					}
+					else PlaySound('snd/shimmerClick.mp3');
+					me.die();
+				},
+				missFunc:function(me)
+				{
+					if (this.chain>0 && this.totalFromChain>0)
+					{
+						Game.Popup('Cookie chain broken.<div style="font-size:65%;">You made '+Beautify(this.totalFromChain)+' cookies.</div>',me.x+me.l.offsetWidth/2,me.y);
+						this.chain=0;this.totalFromChain=0;
+					}
+					if (me.spawnLead) Game.missedGoldenClicks++;
+				},
+				spawnsOnTimer:true,
+				spawnConditions:function()
+				{
+					if (!Game.Has('Golden switch [off]')) return true; else return false;
+				},
+				spawned:0,
+				time:0,
+				minTime:0,
+				maxTime:0,
+				getTimeMod:function(m)
+				{
+					if (Game.Has('Lucky day')) m/=2;
+					if (Game.Has('Serendipity')) m/=2;
+					if (Game.Has('Golden goose egg')) m*=0.95;
+					if (Game.Has('Heavenly luck')) m*=0.95;
+					if (Game.hasAura('Arcane Aura')) m*=0.95;
+					if (Game.season=='easter' && Game.Has('Starspawn')) m*=0.98;
+					else if (Game.season=='halloween' && Game.Has('Starterror')) m*=0.98;
+					else if (Game.season=='valentines' && Game.Has('Starlove')) m*=0.98;
+					else if (Game.season=='fools' && Game.Has('Startrade')) m*=0.95;
+					if (this.chain>0) m=0.05;
+					if (Game.Has('Gold hoard')) m=0.01;
+					return Math.ceil(Game.fps*60*m);
+				},
+				getMinTime:function()
+				{
+					var m=5;
+					return this.getTimeMod(m);
+				},
+				getMaxTime:function()
+				{
+					var m=15;
+					return this.getTimeMod(m);
+				},
+				last:'',
+			},
+			'reindeer':{
+				reset:function()
+				{
+				},
+				initFunc:function(me)
+				{
+					if (!this.spawned && Game.chimeType==1 && Game.ascensionMode!=1) PlaySound('snd/jingle.mp3');
+					
+					me.x=-128;
+					me.y=Math.floor(Math.random()*Math.max(0,Game.bounds.bottom-Game.bounds.top-256)+Game.bounds.top+128)-128;
+					//me.l.style.left=me.x+'px';
+					//me.l.style.top=me.y+'px';
+					me.l.style.width='167px';
+					me.l.style.height='212px';
+					me.l.style.backgroundImage='url(img/frostedReindeer.png)';
+					me.l.style.opacity='0';
+					//me.l.style.transform='rotate('+(Math.random()*60-30)+'deg) scale('+(Math.random()*1+0.25)+')';
+					me.l.style.display='block';
+					
+					me.life=1;//the reindeer's current progression through its lifespan (in frames)
+					me.dur=4;//duration; the cookie's lifespan in seconds before it despawns
+					
+					var dur=4;
+					if (Game.Has('Weighted sleighs')) dur*=2;
+					me.dur=dur;
+					me.life=Math.ceil(Game.fps*me.dur);
+					me.sizeMult=1;
+				},
+				updateFunc:function(me)
+				{
+					var curve=1-Math.pow((me.life/(Game.fps*me.dur))*2-1,12);
+					me.l.style.opacity=curve;
+					me.l.style.transform='translate('+(me.x+(Game.bounds.right-Game.bounds.left)*(1-me.life/(Game.fps*me.dur)))+'px,'+(me.y-Math.abs(Math.sin(me.life*0.1))*128)+'px) rotate('+(Math.sin(me.life*0.2+0.3)*10)+'deg) scale('+(me.sizeMult*(1+Math.sin(me.id*0.53)*0.1))+')';
+					me.life--;
+					if (me.life<=0) {this.missFunc(me);me.die();}
+				},
+				popFunc:function(me)
+				{
+					//get achievs and stats
+					if (me.spawnLead)
+					{
+						Game.reindeerClicked++;
+					}
 					
 					var moni=Math.max(25,Game.cookiesPs*60*1);//1 minute of cookie production, or 25 cookies - whichever is highest
 					if (Game.Has('Ho ho ho-flavored frosting')) moni*=2;
@@ -3498,17 +3611,169 @@ Game.Launch=function()
 						else cookie='';
 					}
 					
+					var popup='';
+					
 					if (Game.prefs.popups) Game.Popup('You found '+choose(['Dasher','Dancer','Prancer','Vixen','Comet','Cupid','Donner','Blitzen','Rudolph'])+'!<br>The reindeer gives you '+Beautify(moni)+' cookies.'+(cookie==''?'':'<br>You are also rewarded with '+cookie+'!'));
 					else Game.Notify('You found '+choose(['Dasher','Dancer','Prancer','Vixen','Comet','Cupid','Donner','Blitzen','Rudolph'])+'!','The reindeer gives you '+Beautify(moni)+' cookies.'+(cookie==''?'':'<br>You are also rewarded with '+cookie+'!'),[12,9],6);
-				}
-				l('seasonPopup').style.display='none';
-				me.minTime=me.getMinTime();
-				me.maxTime=me.getMaxTime();
+					popup='<div style="font-size:80%;">+'+Beautify(moni)+' cookies!</div>';
+					
+					if (popup!='') Game.Popup(popup,Game.mouseX,Game.mouseY);
+					
+					//sparkle and kill the shimmer
+					Game.SparkleAt(Game.mouseX,Game.mouseY);
+					PlaySound('snd/jingleClick.mp3');
+					me.die();
+				},
+				missFunc:function(me)
+				{
+				},
+				spawnsOnTimer:true,
+				spawnConditions:function()
+				{
+					if (Game.season=='christmas') return true; else return false;
+				},
+				spawned:0,
+				time:0,
+				minTime:0,
+				maxTime:0,
+				getTimeMod:function(m)
+				{
+					if (Game.Has('Reindeer baking grounds')) m/=2;
+					if (Game.Has('Starsnow')) m*=0.95;
+					if (Game.Has('Reindeer season')) m=0.01;
+					return Math.ceil(Game.fps*60*m);
+				},
+				getMinTime:function()
+				{
+					var m=3;
+					return this.getTimeMod(m);
+				},
+				getMaxTime:function()
+				{
+					var m=6;
+					return this.getTimeMod(m);
+				},
 			}
-			Game.Click=0;
-		}
-		l('seasonPopup')[Game.clickStr]=Game.seasonPopup.click;
+		};
 		
+		Game.buffs=[];//buffs currently in effect
+		Game.buffsN=0;
+		Game.buffsL=l('buffs');
+		Game.setBuff=function(obj)
+		{
+			/*
+			usage example :
+				Game.setBuff({
+					name:'Kitten rain',
+					desc:'It\'s raining kittens!',
+					icon:[0,0],
+					time:30*Game.fps
+				});
+			other parameters :
+				visible:false - will hide the buff from the buff list
+				add:true - if this buff already exists, add the new duration to the old one
+				max:true - if this buff already exists, set the new duration to the max of either
+				onDie:function(){} - function will execute when the buff runs out
+				power:3 - used by some buffs
+			*/
+			var buff={
+				visible:true,
+				time:0,
+				name:'???',
+				desc:'',
+				icon:[0,0]
+			};
+			if (Game.buffs[obj.name])//if there is already a buff in effect with this name
+			{
+				var buff=Game.buffs[obj.name];
+				if (obj.max) buff.time=Math.max(obj.time,buff.time);//new duration is max of old and new
+				if (obj.add) buff.time+=obj.time;//new duration is old + new
+				if (!obj.max && !obj.add) buff.time=obj.time;//new duration is set to new
+				buff.maxTime=buff.time;
+			}
+			else//create new buff
+			{
+				for (var i in obj)//paste parameters onto buff
+				{buff[i]=obj[i];}
+				buff.maxTime=buff.time;
+				Game.buffs[buff.name]=buff;
+				buff.id=Game.buffsN;
+				
+				//create dom
+				Game.buffsL.innerHTML=Game.buffsL.innerHTML+'<div id="buff'+buff.id+'" class="crate enabled buff" '+(buff.desc?Game.getTooltip(
+					'<div class="prompt" style="min-width:200px;text-align:center;font-size:11px;margin:8px 0px;"><h3>'+buff.name+'</h3><div class="line"></div>'+buff.desc+'</div>'
+				,'left',true):'')+' style="opacity:1;float:none;display:block;background-position:'+(-buff.icon[0]*48)+'px '+(-buff.icon[1]*48)+'px;"></div>';
+				
+				buff.l=l('buff'+buff.id);
+				
+				Game.buffsN++;
+			}
+			Game.recalculateGains=1;
+			Game.storeToRefresh=1;
+			return buff;
+		}
+		Game.hasBuff=function(what)//returns 0 if there is no buff in effect with this name; else, returns its remaining time (in frames)
+		{if (!Game.buffs[what]) return 0; else return Game.buffs[what].time;}
+		Game.updateBuffs=function()//executed every logic frame
+		{
+			for (var i in Game.buffs)
+			{
+				var buff=Game.buffs[i];
+				
+				if (buff.time>=0)
+				{
+					if (!l('buffPieTimer'+buff.id)) l('buff'+buff.id).innerHTML=l('buff'+buff.id).innerHTML+'<div class="pieTimer" id="buffPieTimer'+buff.id+'"></div>';
+					var T=1-(buff.time/buff.maxTime);
+					T=(T*144)%144;
+					l('buffPieTimer'+buff.id).style.backgroundPosition=(-Math.floor(T%18))*48+'px '+(-Math.floor(T/18))*48+'px';
+				}
+				buff.time--;
+				if (buff.time<=0)
+				{
+					if (Game.onCrate==l('buff'+buff.id)) Game.tooltip.hide();
+					if (buff.onDie) buff.onDie();
+					Game.buffsL.removeChild(l('buff'+buff.id));
+					if (Game.buffs[buff.name]) Game.buffs[buff.name]=0;
+					Game.recalculateGains=1;
+					Game.storeToRefresh=1;
+				}
+			}
+		}
+		Game.killBuffs=function()//remove all buffs
+		{Game.buffs=[];Game.recalculateGains=1;Game.storeToRefresh=1;}
+		
+		
+		Game.goldenCookieChoices=[
+			"Frenzy","frenzy",
+			"Lucky","multiply cookies",
+			"Ruin","ruin cookies",
+			"Elder frenzy","blood frenzy",
+			"Clot","clot",
+			"Click frenzy","click frenzy",
+			"Cursed finger","cursed finger",
+			"Cookie chain","chain cookie",
+			"Cookie storm","cookie storm",
+			"Building special","building special",
+			"Dragon Harvest","dragon harvest",
+			"Dragonflight","dragonflight",
+			"Blab","blab"
+		];
+		Game.goldenCookieBuildingBuffs={
+			'Cursor':['High-five','Slap to the face'],
+			'Grandma':['Congregation','Senility'],
+			'Farm':['Luxuriant harvest','Locusts'],
+			'Mine':['Ore vein','Cave-in'],
+			'Factory':['Oiled-up','Jammed machinery'],
+			'Bank':['Juicy profits','Recession'],
+			'Temple':['Fervent adoration','Crisis of faith'],
+			'Wizard tower':['Manabloom','Magivores'],
+			'Shipment':['Delicious lifeforms','Black holes'],
+			'Alchemy lab':['Breakthrough','Lab disaster'],
+			'Portal':['Righteous cataclysm','Dimensional calamity'],
+			'Time machine':['Golden ages','Time jam'],
+			'Antimatter condenser':['Extra cycles','Predictable tragedy'],
+			'Prism':['Solar flare','Eclipse'],
+		};
 		
 		/*=====================================================================================
 		PARTICLES
@@ -3627,22 +3892,15 @@ Game.Launch=function()
 		l('particles').innerHTML=str;
 		Game.textParticlesUpdate=function()
 		{
-			Game.textParticlesY=0;
 			for (var i in Game.textParticles)
 			{
 				var me=Game.textParticles[i];
 				if (me.life!=-1)
 				{
-					Game.textParticlesY+=64;//me.l.clientHeight;
-					var y=me.y-(1-Math.pow(1-me.life/(Game.fps*4),10))*50;
-					//me.y=me.life*0.25+Math.random()*0.25;
 					me.life++;
-					var el=me.l;
-					el.style.left=Math.floor(-200+me.x)+'px';
-					el.style.bottom=Math.floor(-y)+'px';
-					el.style.opacity=1-(me.life/(Game.fps*4));
 					if (me.life>=Game.fps*4)
 					{
+						var el=me.l;
 						me.life=-1;
 						el.style.opacity=0;
 						el.style.display='none';
@@ -3650,7 +3908,7 @@ Game.Launch=function()
 				}
 			}
 		}
-		Game.textParticlesAdd=function(text,el)
+		Game.textParticlesAdd=function(text,el,posX,posY)
 		{
 			//pick the first free (or the oldest) particle to replace it
 			var highest=0;
@@ -3665,32 +3923,51 @@ Game.Launch=function()
 				}
 			}
 			var i=highestI;
-			var x=(Math.random()-0.5)*40;
-			var y=0;//+(Math.random()-0.5)*40;
-			if (!el)
+			var noStack=0;
+			if (typeof posX!=='undefined' && typeof posY!=='undefined')
 			{
-				var rect=Game.l.getBoundingClientRect();
-				var x=Math.floor((rect.left+rect.right)/2);
-				var y=Math.floor((rect.bottom))-(Game.mobile*64);
-				x+=(Math.random()-0.5)*40;
-				y+=0;//(Math.random()-0.5)*40;
+				x=posX;
+				y=posY;
+				noStack=1;
 			}
+			else
+			{
+				var x=(Math.random()-0.5)*40;
+				var y=0;//+(Math.random()-0.5)*40;
+				if (!el)
+				{
+					var rect=Game.bounds;
+					var x=Math.floor((rect.left+rect.right)/2);
+					var y=Math.floor((rect.bottom))-(Game.mobile*64);
+					x+=(Math.random()-0.5)*40;
+					y+=0;//(Math.random()-0.5)*40;
+				}
+			}
+			if (!noStack) y-=Game.textParticlesY;
+			
+			x=Math.max(Game.bounds.left+200,x);
+			x=Math.min(Game.bounds.right-200,x);
+			y=Math.max(Game.bounds.top+32,y);
+			
 			var me=Game.textParticles[i];
 			if (!me.l) me.l=l('particle'+i);
 			me.life=0;
 			me.x=x;
-			me.y=y-Game.textParticlesY;
+			me.y=y;
 			me.text=text;
 			me.l.innerHTML=text;
 			me.l.style.left=Math.floor(Game.textParticles[i].x-200)+'px';
 			me.l.style.bottom=Math.floor(-Game.textParticles[i].y)+'px';
 			me.l.style.display='block';
-			Game.textParticlesY+=60;
+			me.l.className='particle title';
+			me.l.offsetWidth=me.l.offsetWidth;
+			me.l.className='particle title risingUpLinger';
+			if (!noStack) Game.textParticlesY+=60;
 		}
 		Game.popups=1;
-		Game.Popup=function(text)
+		Game.Popup=function(text,x,y)
 		{
-			if (Game.popups) Game.textParticlesAdd(text);
+			if (Game.popups) Game.textParticlesAdd(text,0,x,y);
 		}
 		
 		//display sparkles at a set position
@@ -4875,6 +5152,7 @@ Game.Launch=function()
 				if (Game.Has('Faberge egg')) price*=0.99;
 				if (Game.Has('Divine discount')) price*=0.99;
 				if (Game.hasAura('Fierce Hoarder')) price*=0.98;
+				if (Game.hasBuff('Everything must go')) price*=0.95;
 				return Math.ceil(price);
 			}
 			this.getSumPrice=function(amount)//return how much it would cost to buy [amount] more of this building
@@ -4889,6 +5167,7 @@ Game.Launch=function()
 				if (Game.Has('Faberge egg')) price*=0.99;
 				if (Game.Has('Divine discount')) price*=0.99;
 				if (Game.hasAura('Fierce Hoarder')) price*=0.98;
+				if (Game.hasBuff('Everything must go')) price*=0.95;
 				return Math.ceil(price);
 			}
 			this.getReverseSumPrice=function(amount)//return how much you'd get from selling [amount] of this building
@@ -4903,6 +5182,7 @@ Game.Launch=function()
 				if (Game.Has('Faberge egg')) price*=0.99;
 				if (Game.Has('Divine discount')) price*=0.99;
 				if (Game.hasAura('Fierce Hoarder')) price*=0.98;
+				if (Game.hasBuff('Everything must go')) price*=0.95;
 				price*=this.getSellMultiplier();
 				return Math.ceil(price);
 			}
@@ -5150,6 +5430,7 @@ Game.Launch=function()
 				l('productName'+me.id).innerHTML=displayName;
 				l('productOwned'+me.id).innerHTML=me.amount?me.amount:'';
 				l('productPrice'+me.id).innerHTML=Beautify(Math.round(price));
+				l('productPriceMult'+me.id).innerHTML=(Game.buyBulk>1)?('x'+Game.buyBulk+' '):'';
 			}
 			
 			this.draw=function(){};
@@ -5340,7 +5621,7 @@ Game.Launch=function()
 			for (var i in Game.Objects)
 			{
 				var me=Game.Objects[i];
-				str+='<div class="product toggledOff" '+Game.getDynamicTooltip('Game.ObjectsById['+me.id+'].tooltip','store')+' id="product'+me.id+'"><div class="icon off" id="productIconOff'+me.id+'" style=""></div><div class="icon" id="productIcon'+me.id+'" style=""></div><div class="content"><div class="lockedTitle">???</div><div class="title" id="productName'+me.id+'"></div><span class="price" id="productPrice'+me.id+'"></span><div class="title owned" id="productOwned'+me.id+'"></div></div>'+
+				str+='<div class="product toggledOff" '+Game.getDynamicTooltip('Game.ObjectsById['+me.id+'].tooltip','store')+' id="product'+me.id+'"><div class="icon off" id="productIconOff'+me.id+'" style=""></div><div class="icon" id="productIcon'+me.id+'" style=""></div><div class="content"><div class="lockedTitle">???</div><div class="title" id="productName'+me.id+'"></div><span class="priceMult" id="productPriceMult'+me.id+'"></span><span class="price" id="productPrice'+me.id+'"></span><div class="title owned" id="productOwned'+me.id+'"></div></div>'+
 				/*'<div class="buySell"><div style="left:0px;" id="buttonBuy10-'+me.id+'">Buy 10</div><div style="left:100px;" id="buttonSell-'+me.id+'">Sell 1</div><div style="left:200px;" id="buttonSellAll-'+me.id+'">Sell all</div></div>'+*/
 				'</div>';
 			}
@@ -5390,6 +5671,21 @@ Game.Launch=function()
 			return ((base)*(Math.pow(2,mult))+bonus);
 		}
 		
+		Game.magicCpS=function(what)
+		{
+			/*
+			if (Game.Objects[what].amount>=250)
+			{
+				//this makes buildings give 1% more cookies for every building over 250.
+				//this turns out to be rather stupidly overpowered.
+				var n=Game.Objects[what].amount-250;
+				return 1+Math.pow(1.01,n);
+			}
+			else return 1;
+			*/
+			return 1;
+		}
+		
 		//define objects
 		new Game.Object('Cursor','cursor|cursors|clicked','Autoclicks once every 10 seconds.','cursoricon',0,{},15,function(){
 			var add=0;
@@ -5402,10 +5698,12 @@ Game.Launch=function()
 			if (Game.Has('Sextillion fingers')) add+=	50000;
 			if (Game.Has('Septillion fingers')) add+=	500000;
 			if (Game.Has('Octillion fingers')) add+=	5000000;
+			var mult=1;
 			var num=0;
 			for (var i in Game.Objects) {if (Game.Objects[i].name!='Cursor') num+=Game.Objects[i].amount;}
 			add=add*num;
-			return Game.ComputeCps(0.1,Game.Has('Reinforced index finger')+Game.Has('Carpal tunnel prevention cream')+Game.Has('Ambidextrous'),add);
+			mult*=Game.magicCpS('Cursor');
+			return Game.ComputeCps(0.1,Game.Has('Reinforced index finger')+Game.Has('Carpal tunnel prevention cream')+Game.Has('Ambidextrous'),add)*mult;
 		},function(){
 			if (this.amount>=1) Game.Unlock(['Reinforced index finger','Carpal tunnel prevention cream']);
 			if (this.amount>=10) Game.Unlock('Ambidextrous');
@@ -5473,6 +5771,8 @@ Game.Launch=function()
 			for (var i in Game.Objects) {if (Game.Objects[i].name!='Grandma') num+=Game.Objects[i].amount;}
 			if (Game.hasAura('Elder Battalion')) mult*=1+0.01*num;
 			
+			mult*=Game.magicCpS(me.name);
+			
 			return (me.baseCps+add)*mult;
 		},function(){
 			Game.UnlockTiered(this);
@@ -5493,6 +5793,7 @@ Game.Launch=function()
 			var mult=1;
 			mult*=Game.GetTieredCpsMult(me);
 			if (Game.Has('Farmer grandmas')) mult*=Game.getGrandmaSynergyUpgradeMultiplier(me.name);
+			mult*=Game.magicCpS(me.name);
 			return me.baseCps*mult;
 		},function(){
 			Game.UnlockTiered(this);
@@ -5503,6 +5804,7 @@ Game.Launch=function()
 			var mult=1;
 			mult*=Game.GetTieredCpsMult(me);
 			if (Game.Has('Miner grandmas')) mult*=Game.getGrandmaSynergyUpgradeMultiplier(me.name);
+			mult*=Game.magicCpS(me.name);
 			return me.baseCps*mult;
 		},function(){
 			Game.UnlockTiered(this);
@@ -5513,6 +5815,7 @@ Game.Launch=function()
 			var mult=1;
 			mult*=Game.GetTieredCpsMult(me);
 			if (Game.Has('Worker grandmas')) mult*=Game.getGrandmaSynergyUpgradeMultiplier(me.name);
+			mult*=Game.magicCpS(me.name);
 			return me.baseCps*mult;
 		},function(){
 			Game.UnlockTiered(this);
@@ -5523,6 +5826,7 @@ Game.Launch=function()
 			var mult=1;
 			mult*=Game.GetTieredCpsMult(me);
 			if (Game.Has('Banker grandmas')) mult*=Game.getGrandmaSynergyUpgradeMultiplier(me.name);
+			mult*=Game.magicCpS(me.name);
 			return me.baseCps*mult;
 		},function(){
 			Game.UnlockTiered(this);
@@ -5533,6 +5837,7 @@ Game.Launch=function()
 			var mult=1;
 			mult*=Game.GetTieredCpsMult(me);
 			if (Game.Has('Priestess grandmas')) mult*=Game.getGrandmaSynergyUpgradeMultiplier(me.name);
+			mult*=Game.magicCpS(me.name);
 			return me.baseCps*mult;
 		},function(){
 			Game.UnlockTiered(this);
@@ -5543,6 +5848,7 @@ Game.Launch=function()
 			var mult=1;
 			mult*=Game.GetTieredCpsMult(me);
 			if (Game.Has('Witch grandmas')) mult*=Game.getGrandmaSynergyUpgradeMultiplier(me.name);
+			mult*=Game.magicCpS(me.name);
 			return me.baseCps*mult;
 		},function(){
 			Game.UnlockTiered(this);
@@ -5553,6 +5859,7 @@ Game.Launch=function()
 			var mult=1;
 			mult*=Game.GetTieredCpsMult(me);
 			if (Game.Has('Cosmic grandmas')) mult*=Game.getGrandmaSynergyUpgradeMultiplier(me.name);
+			mult*=Game.magicCpS(me.name);
 			return me.baseCps*mult;
 		},function(){
 			Game.UnlockTiered(this);
@@ -5563,6 +5870,7 @@ Game.Launch=function()
 			var mult=1;
 			mult*=Game.GetTieredCpsMult(me);
 			if (Game.Has('Transmuted grandmas')) mult*=Game.getGrandmaSynergyUpgradeMultiplier(me.name);
+			mult*=Game.magicCpS(me.name);
 			return me.baseCps*mult;
 		},function(){
 			Game.UnlockTiered(this);
@@ -5573,6 +5881,7 @@ Game.Launch=function()
 			var mult=1;
 			mult*=Game.GetTieredCpsMult(me);
 			if (Game.Has('Altered grandmas')) mult*=Game.getGrandmaSynergyUpgradeMultiplier(me.name);
+			mult*=Game.magicCpS(me.name);
 			return me.baseCps*mult;
 		},function(){
 			Game.UnlockTiered(this);
@@ -5583,6 +5892,7 @@ Game.Launch=function()
 			var mult=1;
 			mult*=Game.GetTieredCpsMult(me);
 			if (Game.Has('Grandmas\' grandmas')) mult*=Game.getGrandmaSynergyUpgradeMultiplier(me.name);
+			mult*=Game.magicCpS(me.name);
 			return me.baseCps*mult;
 		},function(){
 			Game.UnlockTiered(this);
@@ -5593,6 +5903,7 @@ Game.Launch=function()
 			var mult=1;
 			mult*=Game.GetTieredCpsMult(me);
 			if (Game.Has('Antigrandmas')) mult*=Game.getGrandmaSynergyUpgradeMultiplier(me.name);
+			mult*=Game.magicCpS(me.name);
 			return me.baseCps*mult;
 		},function(){
 			Game.UnlockTiered(this);
@@ -5604,6 +5915,7 @@ Game.Launch=function()
 			var mult=1;
 			mult*=Game.GetTieredCpsMult(me);
 			if (Game.Has('Rainbow grandmas')) mult*=Game.getGrandmaSynergyUpgradeMultiplier(me.name);
+			mult*=Game.magicCpS(me.name);
 			return me.baseCps*mult;
 		},function(){
 			Game.UnlockTiered(this);
@@ -6979,7 +7291,6 @@ Game.Launch=function()
 					}
 					Game.season=this.season;
 					Game.seasonT=Game.getSeasonDuration();
-					Game.seasonPopup.reset();
 					Game.storeToRefresh=1;
 					Game.upgradesToRebuild=1;
 					Game.Objects['Grandma'].redraw();
@@ -7545,7 +7856,7 @@ Game.Launch=function()
 		Game.CpsAchievement('Faster menner');
 		Game.CpsAchievement('And yet you\'re still hungry');
 		Game.CpsAchievement('The Abakening');
-		Game.CpsAchievement('There\'s really no hard limit to how long these achievement names can be and to be quite honest I\'m rather curious to see how far we can go.<br>Adolphus W. Green (1844–1917) started as the Principal of the Groton School in 1864. By 1865, he became second assistant librarian at the New York Mercantile Library; from 1867 to 1869, he was promoted to full librarian. From 1896 to 1973, he worked for Evarts, Southmayd & Choate, a law firm co-founded by William M. Evarts, Charles Ferdinand Southmayd and Joseph Hodges Choate. He was admitted to the New York State Bar Association in 1873.<br>Anyway, how\'s your day been?');//Game.last.shortName='There\'s really no hard limit to how long these achievement names can be and to be quite honest I\'m [...]';
+		Game.CpsAchievement('There\'s really no hard limit to how long these achievement names can be and to be quite honest I\'m rather curious to see how far we can go.<br>Adolphus W. Green (1844–1917) started as the Principal of the Groton School in 1864. By 1865, he became second assistant librarian at the New York Mercantile Library; from 1867 to 1869, he was promoted to full librarian. From 1869 to 1873, he worked for Evarts, Southmayd & Choate, a law firm co-founded by William M. Evarts, Charles Ferdinand Southmayd and Joseph Hodges Choate. He was admitted to the New York State Bar Association in 1873.<br>Anyway, how\'s your day been?');//Game.last.shortName='There\'s really no hard limit to how long these achievement names can be and to be quite honest I\'m [...]';
 		Game.CpsAchievement('Fast');Game.last.baseDesc+='<q>Wow!</q>';Game.last.desc=BeautifyInText(Game.last.baseDesc);
 		
 		order=7002;
@@ -7584,6 +7895,10 @@ Game.Launch=function()
 		
 		order=35000;
 		new Game.Achievement('Last Chance to See','Burst the near-extinct <b>shiny wrinkler</b>.<q>You monster!</q>',[24,12]);Game.last.pool='shadow';
+		
+		order=10000;
+		new Game.Achievement('Early bird','Click a golden cookie <b>less than 1 second after it spawns</b>.',[10,14]);
+		new Game.Achievement('Fading luck','Click a golden cookie <b>less than 1 second before it dies</b>.',[10,14]);
 		
 		//end of achievements
 		
@@ -7806,6 +8121,7 @@ Game.Launch=function()
 					{
 						if (Game.prefs.popups) Game.Popup('Exploded a '+(me.type==1?'shiny ':'')+'wrinkler : found '+Beautify(me.sucked)+' cookies!');
 						else Game.Notify('Exploded a '+(me.type==1?'shiny ':'')+'wrinkler','Found <b>'+Beautify(me.sucked)+'</b> cookies!',[19,8],6);
+						Game.Popup('<div style="font-size:80%;">+'+Beautify(me.sucked)+' cookies</div>',Game.mouseX,Game.mouseY);
 						
 						if (Game.season=='halloween')
 						{
@@ -8465,6 +8781,18 @@ Game.Launch=function()
 			}
 			else
 			{
+			
+				var goodBuff=0;
+				var badBuff=0;
+				var buffs=['Click frenzy','Frenzy','Elder frenzy','Dragonflight','Dragon Harvest','Cursed finger'];
+				for (var i in Game.goldenCookieBuildingBuffs)
+				{buffs.push(Game.goldenCookieBuildingBuffs[i][0]);}
+				for (var i in buffs){if (Game.hasBuff(buffs[i])) goodBuff=1;}
+				var buffs=['Clot'];
+				for (var i in Game.goldenCookieBuildingBuffs)
+				{buffs.push(Game.goldenCookieBuildingBuffs[i][1]);}
+				for (var i in buffs){if (Game.hasBuff(buffs[i])) badBuff=1;}
+				
 				if (Game.drawT%15==0)
 				{
 					Game.defaultBg='bgBlue';
@@ -8523,13 +8851,13 @@ Game.Launch=function()
 				Timer.clean();
 				
 				var showDragon=0;
-				if ((Game.clickFrenzyPower==1111 && Game.clickFrenzy>0) || (Game.frenzyPower==15 && Game.frenzy>0)) showDragon=1;
+				if (Game.hasBuff('Dragonflight') || Game.hasBuff('Dragon Harvest')) showDragon=1;
 				
 				Game.cookieOriginX=Math.floor(Game.LeftBackground.canvas.width/2);
 				Game.cookieOriginY=Math.floor(Game.LeftBackground.canvas.height*0.4);
 				
 				if (Game.AscendTimer==0)
-				{
+				{	
 					if (Game.prefs.particles)
 					{
 						//falling cookies
@@ -8651,7 +8979,7 @@ Game.Launch=function()
 							//Game.LeftBackground.rotate(((Game.startDate%360)/360)*Math.PI*2);
 							Game.LeftBackground.drawImage(Pic('perfectCookie.png'),-s/2,-s/2,s,s);
 							
-							if ((Game.clickFrenzy>0 || (Game.frenzy>0 && Game.frenzyPower>=1)) && Game.prefs.particles)//sparkle
+							if (goodBuff && Game.prefs.particles)//sparkle
 							{
 								Game.LeftBackground.globalCompositeOperation='lighter';
 								for (var i=0;i<1;i++)
@@ -8906,18 +9234,9 @@ Game.Launch=function()
 					//shiny border during frenzies etc
 					Game.LeftBackground.globalAlpha=1;
 					var borders='shadedBordersSoft.png';
-					if (Game.clickFrenzy>0 || (Game.frenzy>0 && Game.frenzyPower>=1)) borders='shadedBordersGold.png';
-					else if (Game.frenzy>0) borders='shadedBordersRed.png';
+					if (goodBuff) borders='shadedBordersGold.png';
+					else if (badBuff) borders='shadedBordersRed.png';
 					Game.LeftBackground.drawImage(Pic(borders),0,0,Game.LeftBackground.canvas.width,Game.LeftBackground.canvas.height);
-					
-					if (Game.frenzy>0 && Game.frenzyPower>=100) {Game.timersEl['elderFrenzy'].style.width=((Game.frenzy/Game.frenzyMax)*100)+'%';Game.timersEl['elderFrenzy'].style.display='block';}
-					else if (Game.frenzy>0 && Game.frenzyPower>1) {Game.timersEl['frenzy'].style.width=((Game.frenzy/Game.frenzyMax)*100)+'%';Game.timersEl['frenzy'].style.display='block';}
-					else if (Game.frenzy>0 && Game.frenzyPower<1) {Game.timersEl['clot'].style.width=((Game.frenzy/Game.frenzyMax)*100)+'%';Game.timersEl['clot'].style.display='block';}
-					if (Game.clickFrenzy>0) {Game.timersEl['clickFrenzy'].style.width=((1-Game.clickFrenzy/Game.clickFrenzyMax)*100)+'%';Game.timersEl['clickFrenzy'].style.display='block';}
-					
-					if (Game.frenzy==0) {Game.timersEl['frenzy'].style.display='none';Game.timersEl['elderFrenzy'].style.display='none';Game.timersEl['clot'].style.display='none';}
-					if (Game.clickFrenzy==0) {Game.timersEl['clickFrenzy'].style.display='none';}
-					Timer.track('border');
 				}
 			}
 		};
@@ -8927,9 +9246,7 @@ Game.Launch=function()
 		INITIALIZATION END; GAME READY TO LAUNCH
 		=======================================================================================*/
 		
-		
-		Game.goldenCookie.reset();
-		Game.seasonPopup.reset();
+		Game.killShimmers();
 		
 		//booooo
 		Game.RuinTheFun=function(silent)
@@ -9041,9 +9358,10 @@ Game.Launch=function()
 			str+='<a class="option neato" '+Game.clickStr+'="Game.DebuggingPrestige=!Game.DebuggingPrestige;Game.OpenSesame();Game.BuildAscendTree();">Prestige God Mode '+(Game.DebuggingPrestige?'Off':'On')+'</a>';
 			str+='<a class="option neato" '+Game.clickStr+'="Game.DebugUpgradeCpS();">Debug upgrades CpS</a>';
 			str+='<div class="line"></div>';
-			for (var i=0;i<Game.goldenCookie.choices.length/2;i++)
+			for (var i=0;i<Game.goldenCookieChoices.length/2;i++)
 			{
-				str+='<a class="option neato" '+Game.clickStr+'="Game.goldenCookie.force=\''+Game.goldenCookie.choices[i*2+1]+'\';Game.goldenCookie.spawn();">'+Game.goldenCookie.choices[i*2]+'</a>';
+				str+='<a class="option neato" '+Game.clickStr+'="var newShimmer=new Game.shimmer(\'golden\');newShimmer.force=\''+Game.goldenCookieChoices[i*2+1]+'\';">'+Game.goldenCookieChoices[i*2]+'</a>';
+				//str+='<a class="option neato" '+Game.clickStr+'="Game.goldenCookie.force=\''+Game.goldenCookie.choices[i*2+1]+'\';Game.goldenCookie.spawn();">'+Game.goldenCookie.choices[i*2]+'</a>';
 				//str+='<a class="option neato" '+Game.clickStr+'="Game.goldenCookie.click(0,\''+Game.goldenCookie.choices[i*2+1]+'\');">'+Game.goldenCookie.choices[i*2]+'</a>';
 			}
 			str+='</div>';
@@ -9102,6 +9420,8 @@ Game.Launch=function()
 	=======================================================================================*/
 	Game.Logic=function()
 	{
+		Game.bounds=Game.l.getBoundingClientRect();
+		
 		if (!Game.OnAscend && Game.AscendTimer==0)
 		{
 			for (var i in Game.Objects)
@@ -9228,16 +9548,6 @@ Game.Launch=function()
 				me.totalCookies+=(me.storedTotalCps*Game.globalCpsMult)/Game.fps;
 			}
 			if (Game.cookies && Game.T%Math.ceil(Game.fps/Math.min(10,Game.cookiesPs))==0 && Game.prefs.particles) Game.particleAdd();//cookie shower
-			if (Game.frenzy>0)
-			{
-				Game.frenzy--;
-				if (Game.frenzy<1) Game.recalculateGains=1;
-			}
-			if (Game.clickFrenzy>0)
-			{
-				Game.clickFrenzy--;
-				if (Game.clickFrenzy<1) Game.recalculateGains=1;
-			}
 			
 			if (Game.T%(Game.fps*10)==0) Game.recalculateGains=1;//recalculate CpS every 10 seconds (for dynamic boosts such as Century egg)
 			
@@ -9432,8 +9742,8 @@ Game.Launch=function()
 			if (Game.storeToRefresh) Game.RefreshStore();
 			if (Game.upgradesToRebuild) Game.RebuildUpgrades();
 			
-			Game.goldenCookie.update();
-			Game.seasonPopup.update();
+			Game.updateShimmers();
+			Game.updateBuffs();
 			
 			Game.UpdateTicker();
 		}
@@ -9533,8 +9843,6 @@ Game.Launch=function()
 		
 		if (Game.T%(Game.fps*60)==0 && Game.T>Game.fps*10 && Game.prefs.autosave && !Game.OnAscend) Game.WriteSave();
 		if (Game.T%(Game.fps*60*30)==0 && Game.T>Game.fps*10 && Game.prefs.autoupdate) Game.CheckUpdates();
-		
-		
 		
 		Game.T++;
 	}
