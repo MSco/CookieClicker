@@ -164,7 +164,7 @@ M.launch=function()
 				{
 					var me=M.godsById[M.slot[id]];
 					var slot=me.slot;
-					if (Game.hasAura('Supreme Intellect')) slot=1;
+					if (Game.hasAura('Supreme Intellect')) slot=Math.max(0,slot-1);
 					me.icon=me.icon||[0,0];
 				}
 				var str='<div style="padding:8px 4px;min-width:350px;">'+
@@ -299,7 +299,7 @@ M.launch=function()
 			{
 				if (M.slot[i]==god.id)
 				{
-					if (Game.hasAura('Supreme Intellect')) return 2;
+					if (Game.hasAura('Supreme Intellect')) return Math.max(1,i);
 					else return (i+1);
 				}
 			}
@@ -320,7 +320,7 @@ M.launch=function()
 		
 		M.dragonBoostTooltip=function()
 		{
-			return '<div style="width:280px;padding:8px;text-align:center;"><b>'+loc("Supreme Intellect")+'</b><div class="line"></div>'+loc("All pantheon slots behave as ruby slots.")+'</div>';
+			return '<div style="width:280px;padding:8px;text-align:center;"><b>'+loc("Supreme Intellect")+'</b><div class="line"></div>'+loc("The jade slot behaves as a ruby slot and the ruby slot behaves as a diamond slot.")+'</div>';
 		}
 		
 		var str='';

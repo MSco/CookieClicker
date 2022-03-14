@@ -114,7 +114,7 @@ M.launch=function()
 			},
 		};
 		M.goodsById=[];var n=0;
-		for (var i in M.goods){var it=M.goods[i];it.id=n;it.hidden=false;it.active=false;it.last=0;it.building=Game.Objects[i];it.stock=0;it.mode=0;it.dur=0;it.val=1;it.vals=[it.val];it.d=0;M.goodsById[n]=it;it.icon=[it.building.iconColumn,33];it.name=loc(FindLocStringByPart('STOCK '+(it.id+1)+' TYPE'));it.company=loc(FindLocStringByPart('STOCK '+(it.id+1)+' NAME'));it.symbol=loc(FindLocStringByPart('STOCK '+(it.id+1)+' LOGO'));n++;}
+		for (var i in M.goods){var it=M.goods[i];it.id=n;it.hidden=false;it.active=false;it.last=0;it.building=Game.Objects[i];it.stock=0;it.mode=0;it.dur=0;it.prev=0;it.val=1;it.vals=[it.val];it.d=0;M.goodsById[n]=it;it.icon=[it.building.iconColumn,33];it.name=loc(FindLocStringByPart('STOCK '+(it.id+1)+' TYPE'));it.company=loc(FindLocStringByPart('STOCK '+(it.id+1)+' NAME'));it.symbol=loc(FindLocStringByPart('STOCK '+(it.id+1)+' LOGO'));n++;}
 		
 		M.goodTooltip=function(id)
 		{
@@ -154,6 +154,8 @@ M.launch=function()
 				if (!buyOrSell) n=Math.min(n,stock);
 				var str='<div style="padding:8px 4px;min-width:128px;text-align:center;font-size:11px;">'+
 					'<div style="font-size:9px;opacity:0.6;">'+cap(loc("stock:"))+' <b'+((!buyOrSell && stock==0)?' class="red"':'')+'>'+Beautify(stock)+'</b>/<b'+((buyOrSell && stock>=maxStock)?' class="red"':'')+'>'+Beautify(maxStock)+'</b></div>'+
+					(me.prev?('<div class="line"></div>'+
+					'<div style="font-size:9px;opacity:0.6;font-weight:bold;">'+loc("last bought at<br>$%1 each",Beautify(me.prev,2))+'</div>'):'')+
 					'<div class="line"></div>'+
 					'<div>'+(buyOrSell?loc("Buy"):loc("Sell"))+' <b>'+Beautify(n)+'</b>x <div class="icon" style="pointer-events:none;display:inline-block;transform:scale(0.5);margin:-16px -18px -16px -14px;vertical-align:middle;background-position:'+(-me.icon[0]*48)+'px '+(-me.icon[1]*48)+'px;"></div> '+me.name+'</div>'+
 					'<div>'+loc("for $%1 each",Beautify(val,2))+'</div>'+
@@ -220,6 +222,7 @@ M.launch=function()
 				if (min>=100) Game.Win('Rookie numbers');
 				if (min>=500) Game.Win('No nobility in poverty');
 				me.last=1;
+				me.prev=costInS;
 				PlaySound('snd/cashOut.mp3',0.4);
 				return true;
 			}
@@ -706,7 +709,7 @@ M.launch=function()
 		for (var iG=0;iG<M.goodsById.length;iG++)
 		{
 			var it=M.goodsById[iG];
-			str+=parseInt(it.val*100)+':'+parseInt(it.mode)+':'+parseInt(it.d*100)+':'+parseInt(it.dur)+':'+parseInt(it.stock)+':'+parseInt(it.hidden?1:0)+':'+parseInt(it.last)+'!';
+			str+=parseInt(it.val*100)+':'+parseInt(it.mode)+':'+parseInt(it.d*100)+':'+parseInt(it.dur)+':'+parseInt(it.stock)+':'+parseInt(it.hidden?1:0)+':'+parseInt(it.last)+':'+parseInt(it.prev*100)+'!';
 		}
 		str+=' '+parseInt(M.parent.onMinigame?'1':'0');
 		return str;
@@ -742,6 +745,7 @@ M.launch=function()
 			it.hidden=parseInt(itData[5])?true:false;
 			it.active=false;
 			it.last=parseInt(itData[6]||0);
+			it.prev=parseInt(itData[7]||0)/100;
 			if (it.building.highest>0) it.active=true;
 			if (it.l) M.updateGoodStyle(it.id);
 		}
@@ -774,6 +778,7 @@ M.launch=function()
 			it.hidden=true;
 			it.active=false;
 			it.last=0;//0: didn't buy or sell this tick; 1: bought this tick; 2: sold this tick
+			it.prev=0;//value during previous purchase of this stock
 			if (it.l) M.updateGoodStyle(it.id);
 		}
 		M.onResize();

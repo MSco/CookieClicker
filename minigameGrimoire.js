@@ -372,7 +372,7 @@ M.launch=function()
 		
 		M.dragonBoostTooltip=function()
 		{
-			return '<div style="width:280px;padding:8px;text-align:center;"><b>'+loc("Supreme Intellect")+'</b><div class="line"></div>'+loc("Grimoire spells are %1% cheaper but fail %1% more.",10)+'</div>';
+			return '<div style="width:280px;padding:8px;text-align:center;"><b>'+loc("Supreme Intellect")+'</b><div class="line"></div>'+loc("Grimoire spells are %1% cheaper but fail %1% more.",10*Game.auraMult('Supreme Intellect'))+'</div>';
 		}
 		
 		var str='';
